@@ -2,6 +2,7 @@
 # live inside this repo at all - see app/includes/db_credentials.example.php
 # for where the real file actually belongs (account root, above public_html).
 db_credentials.php
+app/README.md
 
 # OS/editor junk
 .DS_Store
