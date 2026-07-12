@@ -4,13 +4,13 @@ This replaces the earlier Google Sheets version. It runs entirely on your existi
 
 ## What you're deploying
 A folder called `app` that sits alongside your existing website files, at:
-`creativeprintingsolution.in/app/`
+`creativeprintingsolution.in/creative-printers/`
 
 Your existing site (`index.html`, `image/` folder, etc.) is untouched.
 
 ## Folder structure
 ```
-app/
+creative-printers/
 ├── includes/
 │   ├── db.php        <- your database credentials go here
 │   └── auth.php
@@ -55,11 +55,11 @@ cp includes/db.sample.php includes/db.php
 **Option B - Upload via File Manager/FTP (Single Web Hosting - no SSH):**
 1. Download this repo as a ZIP, or pull it locally with `git clone`.
 2. In hPanel, go to **Files → File Manager**, open `public_html`.
-3. Upload the whole `app` folder so you end up with `public_html/app/...`.
+3. Upload the whole `creative-printers` folder so you end up with `public_html/creative-printers/...`.
 4. Rename `includes/db.sample.php` to `includes/db.php` (or copy it) and fill in your real database name, username, and password from Step 1. Since `db.php` is gitignored, this stays local to the server and never gets committed back.
 
 ## Step 4 — Run the one-time setup
-1. Visit `https://creativeprintingsolution.in/app/setup.php` in your browser.
+1. Visit `https://creativeprintingsolution.in/creative-printers/setup.php` in your browser.
 2. It creates the first login:
    - Username: `admin`
    - Password: `ChangeMe123`
@@ -70,18 +70,18 @@ cp includes/db.sample.php includes/db.php
 1. In hPanel, go to **Advanced → Cron Jobs**.
 2. Create a new cron job:
    - **Frequency:** once a day (e.g. every day at 9:00 AM)
-   - **Command:** `php /home/YOUR_USERNAME/domains/creativeprintingsolution.in/public_html/app/send_reminders.php`
+   - **Command:** `php /home/YOUR_USERNAME/domains/creativeprintingsolution.in/public_html/creative-printers/send_reminders.php`
    (Hostinger shows your exact file path when you click into a folder in File Manager — copy it from there if unsure. Your hosting username is shown at the top of hPanel.)
 3. Save. This runs `send_reminders.php` automatically every day — no need to visit it in a browser.
 
 ## Step 6 — Link it from your website
 Add a link on your existing `index.html`, e.g.:
 ```html
-<a href="/app/login.php">Staff Login</a>
+<a href="/creative-printers/login.php">Staff Login</a>
 ```
 
 ## Step 7 — Start using it
-1. Log in as admin at `creativeprintingsolution.in/app/login.php`.
+1. Log in as admin at `creativeprintingsolution.in/creative-printers/login.php`.
 2. Add staff logins under **Users**.
 3. Add products under **Stock**.
 4. Add a **Purchase Order** header (PO number, date, customer, item, total quantity).
