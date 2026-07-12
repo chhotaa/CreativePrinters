@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-// RUN THIS ONCE by visiting yourdomain.com/creative-printers/setup.php in your browser.
+// RUN THIS ONCE by visiting yourdomain.com/app/setup.php in your browser.
 // It creates the first admin login. DELETE THIS FILE straight after,
 // since anyone could otherwise re-run it.
 // ============================================================

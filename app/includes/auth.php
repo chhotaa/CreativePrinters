@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 function requireLogin() {
     if (!isset($_SESSION['user_id'])) {
-        header('Location: /creative-printers/login.php');
+        header('Location: /app/login.php');
         exit;
     }
 }
@@ -27,6 +27,6 @@ function currentUser() {
 }
 
 function redirectToDashboard($role) {
-    header('Location: ' . ($role === 'admin' ? '/creative-printers/admin/index.php' : '/creative-printers/user/dues.php'));
+    header('Location: ' . ($role === 'admin' ? '/app/admin/index.php' : '/app/user/dues.php'));
     exit;
 }
