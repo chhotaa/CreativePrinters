@@ -1,6 +1,7 @@
-# Real database credentials - never commit this.
-# Copy app/includes/db.sample.php to app/includes/db.php and fill in your real values locally / on the server.
-app/includes/db.php
+# Real database credentials - never commit this. It's not supposed to
+# live inside this repo at all - see app/includes/db_credentials.example.php
+# for where the real file actually belongs (account root, above public_html).
+db_credentials.php
 
 # OS/editor junk
 .DS_Store

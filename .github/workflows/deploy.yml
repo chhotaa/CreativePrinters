@@ -31,6 +31,8 @@ jobs:
           # prior record to compare against, so it re-verifies everything.
           # It's safe to leave the old tracker file orphaned on the server.
           state-name: .ftp-deploy-sync-state-v2.json
+          # includes/db.php no longer needs excluding - it holds no real
+          # credentials anymore (see app/includes/db_credentials.example.php).
           exclude: |
             **/.git*
             **/.git*/**
@@ -38,4 +40,3 @@ jobs:
             **/README.md
             **/*.sql
             **/migrations/**
-            **/includes/db.php

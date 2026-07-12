@@ -16,7 +16,8 @@ public_html/
 ├── image/               <- assets for index.html
 └── app/                 <- this tool
     ├── includes/
-    │   ├── db.php        <- your database credentials go here
+    │   ├── db.php                        <- safe to commit, holds no secrets
+    │   ├── db_credentials.example.php    <- template only
     │   └── auth.php
     ├── admin/
     │   ├── index.php
@@ -47,21 +48,15 @@ public_html/
 3. You should now see 4 empty tables: `users`, `stock`, `purchase_orders`, `deliveries`.
 
 ## Step 3 — Get the code onto the server
-This repo does **not** include your real database password (`includes/db.php` is gitignored - only `includes/db.sample.php`, the template, is committed). Two ways to deploy:
+This repo's `app/includes/db.php` holds **no real credentials** — it just loads them from a separate file, `db_credentials.php`, that you create **once, manually, one level above `public_html`** (i.e. at your Hostinger account root, the same folder `public_html` itself sits in). Keeping it there means it's completely outside anything Git/FTP deployment ever touches — a redeploy, a `git pull`, even a full clean sync can't overwrite or delete it, since it's not part of the deployed directory tree at all.
 
-**Option A - Git on the server (if your Hostinger plan supports SSH/Git):**
-```bash
-git clone YOUR_REPO_URL app
-cd app
-cp includes/db.sample.php includes/db.php
-# edit includes/db.php with your real credentials
-```
+**Deploy the code** (via Git deployment, GitHub Actions FTP, or a manual upload — whichever you're using), then:
 
-**Option B - Upload via File Manager/FTP (Single Web Hosting - no SSH):**
-1. Download this repo as a ZIP, or pull it locally with `git clone`.
-2. In hPanel, go to **Files → File Manager**, open `public_html`.
-3. Upload the whole `app` folder so you end up with `public_html/app/...`.
-4. Rename `includes/db.sample.php` to `includes/db.php` (or copy it) and fill in your real database name, username, and password from Step 1. Since `db.php` is gitignored, this stays local to the server and never gets committed back.
+1. In hPanel **File Manager**, go to your account root (one level above `public_html` — you'll see `public_html` itself listed there).
+2. Create a new file named **`db_credentials.php`** at that level (not inside `public_html`).
+3. Copy the contents of `app/includes/db_credentials.example.php` into it, and fill in your real database name, username, and password from Step 1.
+
+That's it — `db.php` (already deployed as part of the app) will pick these up automatically via `require __DIR__ . '/../../../db_credentials.php'`.
 
 ## Step 4 — Run the one-time setup
 1. Visit `https://creativeprintingsolution.in/app/setup.php` in your browser.
@@ -102,7 +97,7 @@ Add a link on your existing `index.html`, e.g.:
 - **Backups:** hPanel has automatic backups for Single Web Hosting — worth confirming they're turned on, since this is now your live business data.
 
 ## If something doesn't work
-- **"Database connection failed"** → double check `includes/db.php` — database name/user/password must match exactly what hPanel shows.
+- **"Database connection failed"** → double check `db_credentials.php` at your account root (one level above `public_html`) — database name/user/password must match exactly what hPanel shows.
 - **Blank page** → check hPanel's **Error Logs** (under Advanced), PHP errors get logged there.
 - **Cron not sending emails** → run `send_reminders.php` manually first by visiting its URL once in the browser to confirm it works, then check the cron command path is exactly correct.
 - **"Access denied"** → you're logged in as a `user` role trying to reach an admin page — that's expected, only `admin` accounts can manage data.
