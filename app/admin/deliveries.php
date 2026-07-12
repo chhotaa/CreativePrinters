@@ -12,19 +12,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dueDate = $_POST['due_date'];
         $qty = (int)$_POST['quantity'];
 
-        if (!$poId || !$dueDate) {
-            $error = 'PO and due date are required.';
+        if (!$poId || !$dueDate || $qty <= 0) {
+            $error = 'PO, due date, and a positive quantity are required.';
         } else {
-            $stmt = $pdo->prepare('INSERT INTO deliveries (po_id, due_date, quantity) VALUES (?, ?, ?)');
-            $stmt->execute([$poId, $dueDate, $qty]);
-            $message = 'Delivery date added.';
+            $poStmt = $pdo->prepare('SELECT total_quantity FROM purchase_orders WHERE id = ?');
+            $poStmt->execute([$poId]);
+            $po = $poStmt->fetch();
+
+            $sumStmt = $pdo->prepare('SELECT COALESCE(SUM(quantity), 0) AS total FROM deliveries WHERE po_id = ?');
+            $sumStmt->execute([$poId]);
+            $alreadyScheduled = (int)$sumStmt->fetch()['total'];
+
+            if (!$po) {
+                $error = 'Selected PO not found.';
+            } elseif ($alreadyScheduled + $qty > (int)$po['total_quantity']) {
+                $remaining = (int)$po['total_quantity'] - $alreadyScheduled;
+                $error = "Cannot schedule $qty units — only $remaining of {$po['total_quantity']} remain unscheduled for this PO.";
+            } else {
+                $stmt = $pdo->prepare('INSERT INTO deliveries (po_id, due_date, quantity) VALUES (?, ?, ?)');
+                $stmt->execute([$poId, $dueDate, $qty]);
+                $message = 'Delivery date added.';
+            }
         }
     } elseif (isset($_POST['update_status'])) {
         $id = (int)$_POST['delivery_id'];
         $status = $_POST['status'];
-        $stmt = $pdo->prepare('UPDATE deliveries SET status = ? WHERE id = ?');
-        $stmt->execute([$status, $id]);
-        $message = 'Status updated.';
+        $allowedStatuses = ['Pending', 'Shipped', 'Delivered'];
+        if (!in_array($status, $allowedStatuses, true)) {
+            $error = 'Invalid status value.';
+        } else {
+            $stmt = $pdo->prepare('UPDATE deliveries SET status = ? WHERE id = ?');
+            $stmt->execute([$status, $id]);
+            $message = 'Status updated.';
+        }
     } elseif (isset($_POST['delete_delivery'])) {
         $id = (int)$_POST['delivery_id'];
         $stmt = $pdo->prepare('DELETE FROM deliveries WHERE id = ?');
@@ -33,7 +53,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$pos = $pdo->query('SELECT id, po_number, customer_name FROM purchase_orders ORDER BY po_number')->fetchAll();
+$pos = $pdo->query(
+    "SELECT po.id, po.po_number, po.customer_name, po.total_quantity,
+            po.total_quantity - COALESCE(SUM(d.quantity), 0) AS remaining_quantity
+     FROM purchase_orders po
+     LEFT JOIN deliveries d ON d.po_id = po.id
+     GROUP BY po.id, po.po_number, po.customer_name, po.total_quantity
+     ORDER BY po.po_number"
+)->fetchAll();
 
 $deliveries = $pdo->query(
     "SELECT d.*, po.po_number, po.customer_name, po.item_code, po.description
@@ -65,7 +92,7 @@ $deliveries = $pdo->query(
             <select name="po_id" required>
                 <option value="">Select PO Number</option>
                 <?php foreach ($pos as $po): ?>
-                    <option value="<?= $po['id'] ?>"><?= htmlspecialchars($po['po_number']) ?> - <?= htmlspecialchars($po['customer_name']) ?></option>
+                    <option value="<?= $po['id'] ?>"><?= htmlspecialchars($po['po_number']) ?> - <?= htmlspecialchars($po['customer_name']) ?> (<?= (int)$po['remaining_quantity'] ?> of <?= (int)$po['total_quantity'] ?> remaining)</option>
                 <?php endforeach; ?>
             </select>
             <input type="date" name="due_date" required>
@@ -100,10 +127,9 @@ $deliveries = $pdo->query(
                         <form method="POST" style="display:inline-block; margin:0;">
                             <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                             <select name="status" onchange="this.form.submit()">
-                                <option value="">Change status</option>
-                                <option value="Pending">Pending</option>
-                                <option value="Shipped">Shipped</option>
-                                <option value="Delivered">Delivered</option>
+                                <option value="Pending" <?= $d['status'] === 'Pending' ? 'selected' : '' ?>>Pending</option>
+                                <option value="Shipped" <?= $d['status'] === 'Shipped' ? 'selected' : '' ?>>Shipped</option>
+                                <option value="Delivered" <?= $d['status'] === 'Delivered' ? 'selected' : '' ?>>Delivered</option>
                             </select>
                             <input type="hidden" name="update_status" value="1">
                         </form>
