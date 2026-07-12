@@ -35,16 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Creative Printers</title>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/includes/tailwind_head.php'; ?>
 </head>
-<body>
-    <div class="login-container">
-        <h2>Creative Printers</h2>
-        <?php if ($error): ?><div class="error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-        <form method="POST">
-            <input type="text" name="username" placeholder="Username" required autofocus>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit" style="width:100%;">Log In</button>
+<body class="min-h-screen flex items-center justify-center bg-slate-50 p-5">
+    <div class="w-full max-w-sm bg-white rounded-xl shadow-md ring-1 ring-slate-200 p-8">
+        <h2 class="text-2xl font-bold text-brand-dark text-center mb-6">Creative Printers</h2>
+        <?php if ($error): ?><div class="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+        <form method="POST" class="space-y-3">
+            <input type="text" name="username" placeholder="Username" required autofocus class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <input type="password" name="password" placeholder="Password" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <button type="submit" class="w-full px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Log In</button>
         </form>
     </div>
 </body>

@@ -93,64 +93,86 @@ $restockOrders = $pdo->query('SELECT * FROM restock_orders ORDER BY created_at D
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restock Orders - Creative Printers</title>
-    <link rel="stylesheet" href="../style.css">
+    <?php include __DIR__ . '/../includes/tailwind_head.php'; ?>
 </head>
-<body>
-    <div class="topbar">
-        <h2>Restock Orders</h2>
-        <div class="nav-links"><a href="index.php">Dashboard</a><a href="stock.php">Stock</a><a href="../logout.php">Log Out</a></div>
+<body class="bg-slate-50 text-slate-800 p-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 class="text-2xl font-bold text-brand-dark">Restock Orders</h2>
+        <div class="flex flex-wrap items-center gap-1">
+            <a href="index.php" class="px-3 py-1.5 rounded-md text-sm font-semibold text-brand-dark hover:bg-brand-dark hover:text-white transition-colors">Dashboard</a>
+            <a href="stock.php" class="px-3 py-1.5 rounded-md text-sm font-semibold text-brand-dark hover:bg-brand-dark hover:text-white transition-colors">Stock</a>
+            <a href="../logout.php" class="ml-2 px-3 py-1.5 rounded-md text-sm font-semibold bg-brand-green text-white hover:bg-brand-greendark transition-colors">Log Out</a>
+        </div>
     </div>
 
-    <?php if ($message): ?><div class="success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-    <?php if ($error): ?><div class="error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+    <?php if ($message): ?><div class="text-green-700 text-sm bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+    <?php if ($error): ?><div class="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
-    <div class="card">
-        <h3>Create Restock Order</h3>
-        <p style="font-size:13px;color:#666;">This is for buying stock for our own inventory (not a customer Purchase Order). Once created, a staff member marks it Purchased after buying it, then you confirm here to add it into Stock.</p>
-        <form method="POST">
-            <input type="text" name="product_name" list="stock-products" placeholder="Product name" required>
+    <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
+        <h3 class="text-lg font-semibold text-brand-dark mb-3">Create Restock Order</h3>
+        <p class="text-sm text-slate-500 mb-3">This is for buying stock for our own inventory (not a customer Purchase Order). Once created, a staff member marks it Purchased after buying it, then you confirm here to add it into Stock.</p>
+        <form method="POST" class="flex flex-wrap gap-2 items-center">
+            <input type="text" name="product_name" list="stock-products" placeholder="Product name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <datalist id="stock-products">
                 <?php foreach ($existingProducts as $p): ?>
                     <option value="<?= htmlspecialchars($p['product_name']) ?>"></option>
                 <?php endforeach; ?>
             </datalist>
-            <input type="number" name="quantity" placeholder="Quantity to order" required>
-            <input type="text" name="supplier_name" placeholder="Supplier name" required>
-            <input type="text" name="notes" placeholder="Notes (optional)">
-            <button type="submit" name="create_restock" value="1">Create Restock Order</button>
+            <input type="number" name="quantity" placeholder="Quantity to order" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-44">
+            <input type="text" name="supplier_name" placeholder="Supplier name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <input type="text" name="notes" placeholder="Notes (optional)" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <button type="submit" name="create_restock" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Create Restock Order</button>
         </form>
     </div>
 
-    <div class="card">
-        <table>
+    <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5 overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
             <thead>
-                <tr><th>Product</th><th>Qty Ordered</th><th>Supplier</th><th>Notes</th><th>Status</th><th>Qty Received</th><th>Created</th><th></th></tr>
+                <tr class="bg-brand-dark text-white">
+                    <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Product</th>
+                    <th class="text-left px-3 py-2 font-semibold">Qty Ordered</th>
+                    <th class="text-left px-3 py-2 font-semibold">Supplier</th>
+                    <th class="text-left px-3 py-2 font-semibold">Notes</th>
+                    <th class="text-left px-3 py-2 font-semibold">Status</th>
+                    <th class="text-left px-3 py-2 font-semibold">Qty Received</th>
+                    <th class="text-left px-3 py-2 font-semibold">Created</th>
+                    <th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th>
+                </tr>
             </thead>
             <tbody>
-            <?php foreach ($restockOrders as $r): ?>
-                <tr>
-                    <td><?= htmlspecialchars($r['product_name']) ?></td>
-                    <td><?= (int)$r['quantity'] ?></td>
-                    <td><?= htmlspecialchars($r['supplier_name']) ?></td>
-                    <td><?= htmlspecialchars($r['notes'] ?? '') ?></td>
-                    <td class="status-<?= htmlspecialchars($r['status']) ?>"><?= htmlspecialchars($r['status']) ?></td>
-                    <td><?= $r['received_quantity'] !== null ? (int)$r['received_quantity'] : '-' ?></td>
-                    <td><?= htmlspecialchars($r['created_at']) ?></td>
-                    <td>
+            <?php
+            $restockStatusBadge = [
+                'Pending' => 'bg-amber-100 text-amber-800',
+                'Purchased' => 'bg-blue-100 text-blue-800',
+                'Confirmed' => 'bg-green-100 text-green-800',
+                'Cancelled' => 'bg-slate-200 text-slate-600',
+            ];
+            foreach ($restockOrders as $r):
+                $badgeClass = $restockStatusBadge[$r['status']] ?? 'bg-slate-100 text-slate-700';
+            ?>
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                    <td class="px-3 py-2"><?= htmlspecialchars($r['product_name']) ?></td>
+                    <td class="px-3 py-2"><?= (int)$r['quantity'] ?></td>
+                    <td class="px-3 py-2"><?= htmlspecialchars($r['supplier_name']) ?></td>
+                    <td class="px-3 py-2"><?= htmlspecialchars($r['notes'] ?? '') ?></td>
+                    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold <?= $badgeClass ?>"><?= htmlspecialchars($r['status']) ?></span></td>
+                    <td class="px-3 py-2"><?= $r['received_quantity'] !== null ? (int)$r['received_quantity'] : '-' ?></td>
+                    <td class="px-3 py-2"><?= htmlspecialchars($r['created_at']) ?></td>
+                    <td class="px-3 py-2 whitespace-nowrap">
                         <?php if ($r['status'] === 'Pending'): ?>
                             <form method="POST" onsubmit="return confirm('Cancel this restock order?');" style="display:inline-block; margin:0;">
                                 <input type="hidden" name="restock_id" value="<?= $r['id'] ?>">
-                                <button type="submit" name="cancel_restock" value="1" class="btn-danger">Cancel</button>
+                                <button type="submit" name="cancel_restock" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Cancel</button>
                             </form>
                         <?php elseif ($r['status'] === 'Purchased'): ?>
                             <form method="POST" style="display:inline-block; margin:0;">
                                 <input type="hidden" name="restock_id" value="<?= $r['id'] ?>">
-                                <input type="number" name="received_quantity" value="<?= (int)$r['quantity'] ?>" min="0" style="width:90px;display:inline-block;">
-                                <button type="submit" name="confirm_restock" value="1">Confirm</button>
+                                <input type="number" name="received_quantity" value="<?= (int)$r['quantity'] ?>" min="0" class="w-20 px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                                <button type="submit" name="confirm_restock" value="1" class="px-3 py-1.5 rounded-md bg-brand-green text-white text-xs font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Confirm</button>
                             </form>
                             <form method="POST" onsubmit="return confirm('Reject this back to Pending?');" style="display:inline-block; margin:0;">
                                 <input type="hidden" name="restock_id" value="<?= $r['id'] ?>">
-                                <button type="submit" name="reject_restock" value="1" class="btn-danger">Reject</button>
+                                <button type="submit" name="reject_restock" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Reject</button>
                             </form>
                         <?php endif; ?>
                     </td>
