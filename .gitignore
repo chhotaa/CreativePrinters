@@ -1,6 +1,6 @@
 # Real database credentials - never commit this.
-# Copy includes/db.sample.php to includes/db.php and fill in your real values locally / on the server.
-includes/db.php
+# Copy app/includes/db.sample.php to app/includes/db.php and fill in your real values locally / on the server.
+app/includes/db.php
 
 # OS/editor junk
 .DS_Store
