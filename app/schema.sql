@@ -21,15 +21,19 @@ CREATE TABLE IF NOT EXISTS stock (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- A po_number can repeat across multiple item codes (e.g. one customer PO
+-- covering several products), but the same po_number + item_code pair
+-- can't be entered twice.
 CREATE TABLE IF NOT EXISTS purchase_orders (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  po_number VARCHAR(100) UNIQUE NOT NULL,
+  po_number VARCHAR(100) NOT NULL,
   po_date DATE NULL,
   customer_name VARCHAR(150) NOT NULL,
   item_code VARCHAR(100),
   description VARCHAR(255),
   total_quantity INT DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_po_item (po_number, item_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- A single PO can have MANY delivery due dates (split/batch deliveries)

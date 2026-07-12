@@ -54,11 +54,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pos = $pdo->query(
-    "SELECT po.id, po.po_number, po.customer_name, po.total_quantity,
+    "SELECT po.id, po.po_number, po.customer_name, po.item_code, po.total_quantity,
             po.total_quantity - COALESCE(SUM(d.quantity), 0) AS remaining_quantity
      FROM purchase_orders po
      LEFT JOIN deliveries d ON d.po_id = po.id
-     GROUP BY po.id, po.po_number, po.customer_name, po.total_quantity
+     GROUP BY po.id, po.po_number, po.customer_name, po.item_code, po.total_quantity
      ORDER BY po.po_number"
 )->fetchAll();
 
@@ -92,7 +92,7 @@ $deliveries = $pdo->query(
             <select name="po_id" required>
                 <option value="">Select PO Number</option>
                 <?php foreach ($pos as $po): ?>
-                    <option value="<?= $po['id'] ?>"><?= htmlspecialchars($po['po_number']) ?> - <?= htmlspecialchars($po['customer_name']) ?> (<?= (int)$po['remaining_quantity'] ?> of <?= (int)$po['total_quantity'] ?> remaining)</option>
+                    <option value="<?= $po['id'] ?>"><?= htmlspecialchars($po['po_number']) ?> - <?= htmlspecialchars($po['item_code']) ?> - <?= htmlspecialchars($po['customer_name']) ?> (<?= (int)$po['remaining_quantity'] ?> of <?= (int)$po['total_quantity'] ?> remaining)</option>
                 <?php endforeach; ?>
             </select>
             <input type="date" name="due_date" required>

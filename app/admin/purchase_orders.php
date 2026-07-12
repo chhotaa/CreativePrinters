@@ -17,10 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
     if ($poNumber === '' || $customer === '') {
         $error = 'PO number and customer name are required.';
     } else {
-        $check = $pdo->prepare('SELECT id FROM purchase_orders WHERE po_number = ?');
-        $check->execute([$poNumber]);
+        $check = $pdo->prepare('SELECT id FROM purchase_orders WHERE po_number = ? AND item_code = ?');
+        $check->execute([$poNumber, $itemCode]);
         if ($check->fetch()) {
-            $error = 'That PO number already exists.';
+            $error = 'That PO number with this item code already exists.';
         } else {
             $stmt = $pdo->prepare(
                 'INSERT INTO purchase_orders (po_number, po_date, customer_name, item_code, description, total_quantity)
