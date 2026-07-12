@@ -80,7 +80,7 @@ $deliveries = $pdo->query(
 <body>
     <div class="topbar">
         <h2>Delivery Schedule</h2>
-        <div class="nav-links"><a href="index.php">Dashboard</a><a href="purchase_orders.php">Purchase Orders</a><a href="../logout.php">Log Out</a></div>
+        <div class="nav-links"><a href="index.php">Dashboard</a><a href="purchase_orders.php">Purchase Orders</a><a href="restock_orders.php">Restock Orders</a><a href="../logout.php">Log Out</a></div>
     </div>
 
     <?php if ($message): ?><div class="success"><?= htmlspecialchars($message) ?></div><?php endif; ?>

@@ -27,6 +27,7 @@ $dueSoonCount = $pdo->query("SELECT COUNT(*) c FROM deliveries WHERE status != '
         <a href="stock.php">Stock</a>
         <a href="purchase_orders.php">Purchase Orders</a>
         <a href="deliveries.php">Delivery Schedule</a>
+        <a href="restock_orders.php">Restock Orders</a>
     </div>
 
     <div class="card">

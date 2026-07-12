@@ -52,7 +52,7 @@ $users = $pdo->query('SELECT * FROM users ORDER BY username')->fetchAll();
 <body>
     <div class="topbar">
         <h2>Users</h2>
-        <div class="nav-links"><a href="index.php">Dashboard</a><a href="../logout.php">Log Out</a></div>
+        <div class="nav-links"><a href="index.php">Dashboard</a><a href="restock_orders.php">Restock Orders</a><a href="../logout.php">Log Out</a></div>
     </div>
 
     <?php if ($message): ?><div class="success"><?= htmlspecialchars($message) ?></div><?php endif; ?>

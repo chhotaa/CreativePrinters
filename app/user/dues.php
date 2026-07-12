@@ -22,7 +22,7 @@ $deliveries = $pdo->query(
 <body>
     <div class="topbar">
         <h2>Creative Printers - <?= htmlspecialchars($user['username']) ?></h2>
-        <a class="btn" href="../logout.php">Log Out</a>
+        <div class="nav-links"><a href="restock_orders.php">Restock Orders</a><a href="../logout.php">Log Out</a></div>
     </div>
 
     <div class="card">

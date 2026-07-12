@@ -46,3 +46,20 @@ CREATE TABLE IF NOT EXISTS deliveries (
   reminder_sent ENUM('No','Yes') NOT NULL DEFAULT 'No',
   FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Internal restock orders: buying stock for our own inventory (distinct
+-- from purchase_orders, which are customer orders). Workflow: admin
+-- creates (Pending) -> a "user" role marks it Purchased once bought ->
+-- admin gives final Confirmed (adding received_quantity into stock), or
+-- can Cancel a Pending order, or reject a Purchased order back to Pending.
+CREATE TABLE IF NOT EXISTS restock_orders (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_name VARCHAR(150) NOT NULL,
+  quantity INT NOT NULL,
+  supplier_name VARCHAR(150) NOT NULL,
+  notes VARCHAR(255),
+  status ENUM('Pending','Purchased','Confirmed','Cancelled') NOT NULL DEFAULT 'Pending',
+  received_quantity INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

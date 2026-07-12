@@ -43,7 +43,7 @@ $stockItems = $pdo->query('SELECT * FROM stock ORDER BY product_name')->fetchAll
 <body>
     <div class="topbar">
         <h2>Stock</h2>
-        <div class="nav-links"><a href="index.php">Dashboard</a><a href="../logout.php">Log Out</a></div>
+        <div class="nav-links"><a href="index.php">Dashboard</a><a href="restock_orders.php">Restock Orders</a><a href="../logout.php">Log Out</a></div>
     </div>
 
     <?php if ($message): ?><div class="success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
