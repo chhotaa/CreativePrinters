@@ -24,6 +24,13 @@ jobs:
           server-dir: /public_html/
           local-dir: ./
           dangerous-clean-slate: false
+          # Renamed to force a fresh full sync: the old tracker file
+          # (.ftp-deploy-sync-state.json) apparently recorded some files as
+          # deployed when they weren't, causing future runs to skip
+          # re-uploading them. A new state file name means this run has no
+          # prior record to compare against, so it re-verifies everything.
+          # It's safe to leave the old tracker file orphaned on the server.
+          state-name: .ftp-deploy-sync-state-v2.json
           exclude: |
             **/.git*
             **/.git*/**
