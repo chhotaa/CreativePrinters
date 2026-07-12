@@ -1,0 +1,19 @@
+# Block direct web access to version-control and CI metadata folders
+# that Hostinger's Git deployment places inside public_html.
+# These aren't meant to be served - .git exposes full repo history,
+# .github is just workflow config with no runtime purpose on the site.
+RewriteEngine On
+RewriteRule ^\.git - [F,L]
+RewriteRule ^\.github - [F,L]
+
+<IfModule mod_authz_core.c>
+    <DirectoryMatch "^.*/\.(git|github)/">
+        Require all denied
+    </DirectoryMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <DirectoryMatch "^.*/\.(git|github)/">
+        Order allow,deny
+        Deny from all
+    </DirectoryMatch>
+</IfModule>
