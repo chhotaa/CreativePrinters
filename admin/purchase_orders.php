@@ -39,7 +39,7 @@ $pos = $pdo->query('SELECT * FROM purchase_orders ORDER BY po_date DESC, id DESC
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Purchase Orders</title>
+    <title>Purchase Orders - Creative Printers</title>
     <link rel="stylesheet" href="../style.css">
 </head>
 <body>

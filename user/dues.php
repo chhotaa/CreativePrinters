@@ -16,12 +16,12 @@ $deliveries = $pdo->query(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Due Dates</title>
+    <title>Delivery Due Dates - Creative Printers</title>
     <link rel="stylesheet" href="../style.css">
 </head>
 <body>
     <div class="topbar">
-        <h2>Delivery Due Dates - <?= htmlspecialchars($user['username']) ?></h2>
+        <h2>Creative Printers - <?= htmlspecialchars($user['username']) ?></h2>
         <a class="btn" href="../logout.php">Log Out</a>
     </div>
 

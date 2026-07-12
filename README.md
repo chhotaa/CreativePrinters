@@ -1,4 +1,4 @@
-# Stock & Delivery Manager — Hostinger PHP + MySQL Version
+# Creative Printers — Stock & Delivery Manager (Hostinger PHP + MySQL)
 
 This replaces the earlier Google Sheets version. It runs entirely on your existing **Single Web Hosting** plan — no upgrade needed, since PHP + MySQL are supported on every Hostinger hosting plan (Node.js/React/Next.js hosting is not, on Single plans — that needs Business or Cloud).
 

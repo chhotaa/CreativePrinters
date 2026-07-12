@@ -47,7 +47,7 @@ $deliveries = $pdo->query(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Schedule</title>
+    <title>Delivery Schedule - Creative Printers</title>
     <link rel="stylesheet" href="../style.css">
 </head>
 <body>

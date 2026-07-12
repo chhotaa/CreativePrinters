@@ -34,12 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Stock & Delivery Manager</title>
+    <title>Login - Creative Printers</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="login-container">
-        <h2>Stock &amp; Delivery Manager</h2>
+        <h2>Creative Printers</h2>
         <?php if ($error): ?><div class="error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
         <form method="POST">
             <input type="text" name="username" placeholder="Username" required autofocus>

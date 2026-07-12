@@ -13,12 +13,12 @@ $dueSoonCount = $pdo->query("SELECT COUNT(*) c FROM deliveries WHERE status != '
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
+    <title>Admin Dashboard - Creative Printers</title>
     <link rel="stylesheet" href="../style.css">
 </head>
 <body>
     <div class="topbar">
-        <h2>Admin Dashboard - Welcome, <?= htmlspecialchars($user['username']) ?></h2>
+        <h2>Creative Printers - Welcome, <?= htmlspecialchars($user['username']) ?></h2>
         <a class="btn" href="../logout.php">Log Out</a>
     </div>
 
