@@ -10,24 +10,9 @@ $deliveries = $pdo->query(
      JOIN purchase_orders po ON po.id = d.po_id
      ORDER BY d.due_date ASC"
 )->fetchAll();
+$pageTitle = 'Delivery Due Dates';
+include __DIR__ . '/../includes/layout_start.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Due Dates - Creative Printers</title>
-    <?php include __DIR__ . '/../includes/tailwind_head.php'; ?>
-</head>
-<body class="bg-slate-50 text-slate-800 p-5">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 class="text-2xl font-bold text-brand-dark">Creative Printers - <?= htmlspecialchars($user['username']) ?></h2>
-        <div class="flex flex-wrap items-center gap-1">
-            <a href="restock_orders.php" class="px-3 py-1.5 rounded-md text-sm font-semibold text-brand-dark hover:bg-brand-dark hover:text-white transition-colors">Restock Orders</a>
-            <a href="../logout.php" class="ml-2 px-3 py-1.5 rounded-md text-sm font-semibold bg-brand-green text-white hover:bg-brand-greendark transition-colors">Log Out</a>
-        </div>
-    </div>
-
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5 overflow-x-auto">
         <table class="w-full text-sm border-collapse">
             <thead>
@@ -68,5 +53,4 @@ $deliveries = $pdo->query(
             </tbody>
         </table>
     </div>
-</body>
-</html>
+<?php include __DIR__ . '/../includes/layout_end.php'; ?>

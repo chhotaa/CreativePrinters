@@ -86,28 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $existingProducts = $pdo->query('SELECT DISTINCT product_name FROM stock ORDER BY product_name')->fetchAll();
 $restockOrders = $pdo->query('SELECT * FROM restock_orders ORDER BY created_at DESC')->fetchAll();
+$pageTitle = 'Restock Orders';
+include __DIR__ . '/../includes/layout_start.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restock Orders - Creative Printers</title>
-    <?php include __DIR__ . '/../includes/tailwind_head.php'; ?>
-</head>
-<body class="bg-slate-50 text-slate-800 p-5">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 class="text-2xl font-bold text-brand-dark">Restock Orders</h2>
-        <div class="flex flex-wrap items-center gap-1">
-            <a href="index.php" class="px-3 py-1.5 rounded-md text-sm font-semibold text-brand-dark hover:bg-brand-dark hover:text-white transition-colors">Dashboard</a>
-            <a href="stock.php" class="px-3 py-1.5 rounded-md text-sm font-semibold text-brand-dark hover:bg-brand-dark hover:text-white transition-colors">Stock</a>
-            <a href="../logout.php" class="ml-2 px-3 py-1.5 rounded-md text-sm font-semibold bg-brand-green text-white hover:bg-brand-greendark transition-colors">Log Out</a>
-        </div>
-    </div>
-
-    <?php if ($message): ?><div class="text-green-700 text-sm bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-    <?php if ($error): ?><div class="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Create Restock Order</h3>
         <p class="text-sm text-slate-500 mb-3">This is for buying stock for our own inventory (not a customer Purchase Order). Once created, a staff member marks it Purchased after buying it, then you confirm here to add it into Stock.</p>
@@ -181,5 +162,4 @@ $restockOrders = $pdo->query('SELECT * FROM restock_orders ORDER BY created_at D
             </tbody>
         </table>
     </div>
-</body>
-</html>
+<?php include __DIR__ . '/../includes/layout_end.php'; ?>
