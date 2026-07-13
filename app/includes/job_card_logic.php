@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $diePunching = $_POST['die_punching'] ?? '';
         $pastingPerforation = isset($_POST['pasting_perforation']) ? 1 : 0;
         $pastingDoubleBoard = isset($_POST['pasting_double_board']) ? 1 : 0;
+        $details = trim($_POST['details'] ?? '');
 
         if ($productName === '') {
             $error = 'Name is required.';
@@ -39,14 +40,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'INSERT INTO job_cards
                     (job_date, product_name, design_name, board_name_gsm, board_size, cutting_size,
                      board_quantity, copies, colour, lamination_varnish, order_type, plate_type,
-                     die_punching, pasting_perforation, pasting_double_board, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     die_punching, pasting_perforation, pasting_double_board, details, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $jobDate, $productName, $designName ?: null, $boardNameGsm ?: null, $boardSize ?: null,
                 $cuttingSize ?: null, $boardQuantity ?: null, $copies ?: null, $colour ?: null,
                 $laminationVarnish ?: null, $orderType, $plateType, $diePunching ?: null,
-                $pastingPerforation, $pastingDoubleBoard, $_SESSION['user_id'],
+                $pastingPerforation, $pastingDoubleBoard, $details ?: null, $_SESSION['user_id'],
             ]);
             $message = 'Job card #' . str_pad((string)$pdo->lastInsertId(), 2, '0', STR_PAD_LEFT) . ' created.';
         }
@@ -70,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $diePunching = $_POST['die_punching'] ?? '';
             $pastingPerforation = isset($_POST['pasting_perforation']) ? 1 : 0;
             $pastingDoubleBoard = isset($_POST['pasting_double_board']) ? 1 : 0;
+            $details = trim($_POST['details'] ?? '');
 
             if ($productName === '') {
                 $error = 'Name is required.';
@@ -84,14 +86,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'UPDATE job_cards SET
                         job_date = ?, product_name = ?, design_name = ?, board_name_gsm = ?, board_size = ?,
                         cutting_size = ?, board_quantity = ?, copies = ?, colour = ?, lamination_varnish = ?,
-                        order_type = ?, plate_type = ?, die_punching = ?, pasting_perforation = ?, pasting_double_board = ?
+                        order_type = ?, plate_type = ?, die_punching = ?, pasting_perforation = ?, pasting_double_board = ?,
+                        details = ?
                      WHERE id = ?'
                 );
                 $stmt->execute([
                     $jobDate, $productName, $designName ?: null, $boardNameGsm ?: null, $boardSize ?: null,
                     $cuttingSize ?: null, $boardQuantity ?: null, $copies ?: null, $colour ?: null,
                     $laminationVarnish ?: null, $orderType, $plateType, $diePunching ?: null,
-                    $pastingPerforation, $pastingDoubleBoard, $id,
+                    $pastingPerforation, $pastingDoubleBoard, $details ?: null, $id,
                 ]);
                 $message = 'Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' updated.';
             }

@@ -27,9 +27,10 @@ function jcCheck($checked) {
     * { box-sizing: border-box; }
     body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f0f0f0; color: #1a1a1a; }
     .sheet { max-width: 900px; margin: 0 auto; background: #fff; border: 2px solid #1a1a1a; border-radius: 10px; padding: 30px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
-    .company img { max-width: 220px; height: auto; }
-    .company-address { font-size: 13px; color: #333; margin-top: 6px; line-height: 1.5; }
+    .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+    .company { display: flex; align-items: center; gap: 16px; }
+    .company img { max-width: 90px; height: auto; flex-shrink: 0; }
+    .company-address { font-size: 13px; color: #333; line-height: 1.5; }
     .meta { text-align: right; font-size: 15px; }
     .meta div { margin-bottom: 10px; }
     .meta .dotted { display: inline-block; min-width: 100px; border-bottom: 1px dotted #999; padding-bottom: 2px; font-weight: bold; }
@@ -37,7 +38,7 @@ function jcCheck($checked) {
     .title-pill { background: #1a1a1a; color: #fff; text-align: center; padding: 8px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-bottom: 25px; }
     .body-grid { display: flex; gap: 30px; flex-wrap: wrap; }
     .fields { flex: 1.6; min-width: 280px; }
-    .field-row { display: flex; margin-bottom: 18px; }
+    .field-row { display: flex; margin-bottom: 28px; }
     .field-label { width: 150px; flex-shrink: 0; color: #333; }
     .field-value { flex: 1; border-bottom: 1px dotted #999; font-weight: bold; padding-bottom: 3px; }
     .options { flex: 1; min-width: 220px; }
@@ -45,6 +46,7 @@ function jcCheck($checked) {
     .option-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
     .option-box { width: 60px; height: 24px; border: 1px solid #333; border-radius: 3px; text-align: center; font-weight: bold; }
     .footer-title { background: #1a1a1a; color: #fff; text-align: center; padding: 8px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-top: 30px; }
+    .details-box { min-height: 100px; padding: 12px 4px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
     .print-bar { max-width: 900px; margin: 0 auto 15px; text-align: right; }
     .print-btn { background: #9acd32; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; }
     .print-btn:hover { background: #7fae22; }
@@ -108,7 +110,7 @@ function jcCheck($checked) {
             </div>
         </div>
         <div class="footer-title">DETAILS</div>
-        <div style="height: 100px;"></div>
+        <div class="details-box"><?= $jobCard['details'] !== null && $jobCard['details'] !== '' ? nl2br(htmlspecialchars($jobCard['details'])) : '&nbsp;' ?></div>
     </div>
 </body>
 </html>

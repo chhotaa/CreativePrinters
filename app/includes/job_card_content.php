@@ -73,6 +73,10 @@
                     <option value="Old" <?= $jc && $jc['die_punching'] === 'Old' ? 'selected' : '' ?>>Old</option>
                 </select>
             </div>
+            <div class="sm:col-span-2 lg:col-span-3">
+                <label class="block text-xs font-semibold text-slate-500 mb-1">Details</label>
+                <textarea name="details" rows="3" placeholder="Any additional notes for this job card" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green"><?= $val('details') ?></textarea>
+            </div>
             <div class="sm:col-span-2 lg:col-span-3 flex flex-wrap items-center gap-5">
                 <span class="text-xs font-semibold text-slate-500">Pasting:</span>
                 <label class="flex items-center gap-2 text-sm text-slate-700">

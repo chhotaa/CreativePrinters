@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS job_cards (
   die_punching ENUM('New','Old') NULL,
   pasting_perforation TINYINT(1) NOT NULL DEFAULT 0,
   pasting_double_board TINYINT(1) NOT NULL DEFAULT 0,
+  details TEXT NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
