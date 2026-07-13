@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/flash.php';
 requireAdmin();
 
 $message = '';
@@ -20,26 +21,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'INSERT INTO restock_orders (product_name, quantity, supplier_name, notes) VALUES (?, ?, ?, ?)'
             );
             $stmt->execute([$product, $qty, $supplier, $notes !== '' ? $notes : null]);
-            $message = 'Restock order created.';
+            setFlashMessage('Restock order created.');
+            header('Location: restock_orders.php');
+            exit;
         }
     } elseif (isset($_POST['cancel_restock'])) {
         $id = (int)$_POST['restock_id'];
         $stmt = $pdo->prepare("UPDATE restock_orders SET status = 'Cancelled' WHERE id = ? AND status = 'Pending'");
         $stmt->execute([$id]);
         if ($stmt->rowCount() === 1) {
-            $message = 'Restock order cancelled.';
+            setFlashMessage('Restock order cancelled.');
         } else {
-            $error = 'Order could not be cancelled (already processed or not found).';
+            setFlashError('Order could not be cancelled (already processed or not found).');
         }
+        header('Location: restock_orders.php');
+        exit;
     } elseif (isset($_POST['reject_restock'])) {
         $id = (int)$_POST['restock_id'];
         $stmt = $pdo->prepare("UPDATE restock_orders SET status = 'Pending' WHERE id = ? AND status = 'Purchased'");
         $stmt->execute([$id]);
         if ($stmt->rowCount() === 1) {
-            $message = 'Order rejected back to Pending.';
+            setFlashMessage('Order rejected back to Pending.');
         } else {
-            $error = 'Order could not be rejected (not currently awaiting confirmation).';
+            setFlashError('Order could not be rejected (not currently awaiting confirmation).');
         }
+        header('Location: restock_orders.php');
+        exit;
     } elseif (isset($_POST['confirm_restock'])) {
         $id = (int)$_POST['restock_id'];
         $receivedQty = isset($_POST['received_quantity']) ? (int)$_POST['received_quantity'] : -1;
@@ -75,7 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stockStmt->execute([$order['product_name'], $receivedQty]);
 
                 $pdo->commit();
-                $message = 'Order confirmed and stock updated.';
+                setFlashMessage('Order confirmed and stock updated.');
+                header('Location: restock_orders.php');
+                exit;
             } catch (Exception $e) {
                 $pdo->rollBack();
                 $error = $e->getMessage();

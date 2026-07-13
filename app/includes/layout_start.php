@@ -1,4 +1,9 @@
 <?php
+require_once __DIR__ . '/flash.php';
+[$flashMessage, $flashError] = consumeFlashMessages();
+$message = (isset($message) && $message !== '') ? $message : $flashMessage;
+$error = (isset($error) && $error !== '') ? $error : $flashError;
+
 $currentFile = basename($_SERVER['SCRIPT_NAME']);
 $currentDir = basename(dirname($_SERVER['SCRIPT_NAME']));
 

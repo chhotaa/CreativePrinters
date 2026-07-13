@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/flash.php';
 requireAdmin();
 
 $message = '';
@@ -24,7 +25,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)');
                 $stmt->execute([$username, $hash, $role, $email]);
-                $message = 'User added.';
+                setFlashMessage('User added.');
+                header('Location: users.php');
+                exit;
             }
         }
     } elseif (isset($_POST['update_user'])) {
@@ -56,7 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['username'] = $username;
                     $_SESSION['role'] = $role;
                 }
-                $message = 'User updated.';
+                setFlashMessage('User updated.');
+                header('Location: users.php');
+                exit;
             }
         }
     } elseif (isset($_POST['delete_user'])) {
@@ -66,7 +71,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $stmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
             $stmt->execute([$id]);
-            $message = 'User deleted.';
+            setFlashMessage('User deleted.');
+            header('Location: users.php');
+            exit;
         }
     }
 }

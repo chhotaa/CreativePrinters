@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/flash.php';
 $message = $message ?? '';
 $error = $error ?? '';
 $currentRole = currentUser()['role'] ?? null;
@@ -49,7 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $laminationVarnish ?: null, $orderType, $plateType, $diePunching ?: null,
                 $pastingPerforation, $pastingDoubleBoard, $details ?: null, $_SESSION['user_id'],
             ]);
-            $message = 'Job card #' . str_pad((string)$pdo->lastInsertId(), 2, '0', STR_PAD_LEFT) . ' created.';
+            setFlashMessage('Job card #' . str_pad((string)$pdo->lastInsertId(), 2, '0', STR_PAD_LEFT) . ' created.');
+            header('Location: job_cards.php');
+            exit;
         }
     } elseif (isset($_POST['update_job_card'])) {
         if (!$isAdmin) {
@@ -96,7 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $laminationVarnish ?: null, $orderType, $plateType, $diePunching ?: null,
                     $pastingPerforation, $pastingDoubleBoard, $details ?: null, $id,
                 ]);
-                $message = 'Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' updated.';
+                setFlashMessage('Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' updated.');
+                header('Location: job_cards.php');
+                exit;
             }
         }
     } elseif (isset($_POST['delete_job_card'])) {
@@ -106,7 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)$_POST['job_card_id'];
             $stmt = $pdo->prepare('DELETE FROM job_cards WHERE id = ?');
             $stmt->execute([$id]);
-            $message = 'Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' deleted.';
+            setFlashMessage('Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' deleted.');
+            header('Location: job_cards.php');
+            exit;
         }
     }
 }

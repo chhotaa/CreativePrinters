@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/flash.php';
 requireLogin();
 $user = currentUser();
 
@@ -15,10 +16,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_purchased'])) {
         $stmt = $pdo->prepare("UPDATE restock_orders SET status = 'Purchased' WHERE id = ? AND status = 'Pending'");
         $stmt->execute([$id]);
         if ($stmt->rowCount() === 1) {
-            $message = 'Marked as purchased.';
+            setFlashMessage('Marked as purchased.');
         } else {
-            $error = 'Order could not be marked purchased (already processed or not found).';
+            setFlashError('Order could not be marked purchased (already processed or not found).');
         }
+        header('Location: restock_orders.php');
+        exit;
     }
 }
 

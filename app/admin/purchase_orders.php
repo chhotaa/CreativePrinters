@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/flash.php';
 requireAdmin();
 
 $message = '';
@@ -27,7 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
                  VALUES (?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([$poNumber, $poDate, $customer, $itemCode, $description, $totalQty]);
-            $message = 'Purchase order added. Now add its delivery due dates on the Delivery Schedule page.';
+            setFlashMessage('Purchase order added. Now add its delivery due dates on the Delivery Schedule page.');
+            header('Location: purchase_orders.php');
+            exit;
         }
     }
 }

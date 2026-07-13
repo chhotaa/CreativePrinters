@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/flash.php';
 $message = $message ?? '';
 $error = $error ?? '';
 
@@ -21,6 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
         $hash = password_hash($newPassword, PASSWORD_DEFAULT);
         $upd = $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
         $upd->execute([$hash, $_SESSION['user_id']]);
-        $message = 'Password changed successfully.';
+        setFlashMessage('Password changed successfully.');
+        header('Location: change_password.php');
+        exit;
     }
 }

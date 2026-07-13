@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/flash.php';
 requireAdmin();
 
 $message = '';
@@ -31,7 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $stmt = $pdo->prepare('INSERT INTO deliveries (po_id, due_date, quantity) VALUES (?, ?, ?)');
                 $stmt->execute([$poId, $dueDate, $qty]);
-                $message = 'Delivery date added.';
+                setFlashMessage('Delivery date added.');
+                header('Location: deliveries.php');
+                exit;
             }
         }
     } elseif (isset($_POST['update_status'])) {
@@ -43,13 +46,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $stmt = $pdo->prepare('UPDATE deliveries SET status = ? WHERE id = ?');
             $stmt->execute([$status, $id]);
-            $message = 'Status updated.';
+            setFlashMessage('Status updated.');
+            header('Location: deliveries.php');
+            exit;
         }
     } elseif (isset($_POST['delete_delivery'])) {
         $id = (int)$_POST['delivery_id'];
         $stmt = $pdo->prepare('DELETE FROM deliveries WHERE id = ?');
         $stmt->execute([$id]);
-        $message = 'Delivery entry deleted.';
+        setFlashMessage('Delivery entry deleted.');
+        header('Location: deliveries.php');
+        exit;
     }
 }
 

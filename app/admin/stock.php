@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/flash.php';
 requireAdmin();
 
 $message = '';
@@ -20,13 +21,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reorder_level = VALUES(reorder_level)'
             );
             $stmt->execute([$product, $qty, $reorder]);
-            $message = 'Stock saved.';
+            setFlashMessage('Stock saved.');
+            header('Location: stock.php');
+            exit;
         }
     } elseif (isset($_POST['delete_stock'])) {
         $id = (int)$_POST['stock_id'];
         $stmt = $pdo->prepare('DELETE FROM stock WHERE id = ?');
         $stmt->execute([$id]);
-        $message = 'Stock item deleted.';
+        setFlashMessage('Stock item deleted.');
+        header('Location: stock.php');
+        exit;
     }
 }
 
