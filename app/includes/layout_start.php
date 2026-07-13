@@ -9,10 +9,12 @@ $adminNavItems = [
     'purchase_orders.php' => 'Purchase Orders',
     'deliveries.php' => 'Delivery Schedule',
     'restock_orders.php' => 'Restock Orders',
+    'change_password.php' => 'Change Password',
 ];
 $userNavItems = [
     'dues.php' => 'Delivery Due Dates',
     'restock_orders.php' => 'Restock Orders',
+    'change_password.php' => 'Change Password',
 ];
 // Based on which directory the current page lives in (not the viewer's
 // role) - an admin can also visit user/ pages (requireLogin, not

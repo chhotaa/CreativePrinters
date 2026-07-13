@@ -27,6 +27,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'User added.';
             }
         }
+    } elseif (isset($_POST['update_user'])) {
+        $id = (int)$_POST['user_id'];
+        $username = trim($_POST['username']);
+        $role = $_POST['role'];
+        $email = trim($_POST['email']);
+        $newPassword = $_POST['password'] ?? '';
+
+        if ($username === '') {
+            $error = 'Username is required.';
+        } elseif ($id === (int)$_SESSION['user_id'] && $role !== 'admin') {
+            $error = "You can't remove your own admin access.";
+        } else {
+            $check = $pdo->prepare('SELECT id FROM users WHERE username = ? AND id != ?');
+            $check->execute([$username, $id]);
+            if ($check->fetch()) {
+                $error = 'That username already exists.';
+            } else {
+                if ($newPassword !== '') {
+                    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role = ?, email = ?, password_hash = ? WHERE id = ?');
+                    $stmt->execute([$username, $role, $email, $hash, $id]);
+                } else {
+                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role = ?, email = ? WHERE id = ?');
+                    $stmt->execute([$username, $role, $email, $id]);
+                }
+                if ($id === (int)$_SESSION['user_id']) {
+                    $_SESSION['username'] = $username;
+                    $_SESSION['role'] = $role;
+                }
+                $message = 'User updated.';
+            }
+        }
     } elseif (isset($_POST['delete_user'])) {
         $id = (int)$_POST['user_id'];
         if ($id === (int)$_SESSION['user_id']) {
@@ -39,21 +71,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$editUser = null;
+if (isset($_GET['edit'])) {
+    $editStmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
+    $editStmt->execute([(int)$_GET['edit']]);
+    $editUser = $editStmt->fetch();
+}
+
 $users = $pdo->query('SELECT * FROM users ORDER BY username')->fetchAll();
 $pageTitle = 'Users';
 include __DIR__ . '/../includes/layout_start.php';
 ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
-        <h3 class="text-lg font-semibold text-brand-dark mb-3">Add User</h3>
+        <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= $editUser ? 'Edit User' : 'Add User' ?></h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center">
-            <input type="text" name="username" placeholder="Username" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <input type="password" name="password" placeholder="Password" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <?php if ($editUser): ?>
+                <input type="hidden" name="user_id" value="<?= $editUser['id'] ?>">
+            <?php endif; ?>
+            <input type="text" name="username" placeholder="Username" required value="<?= $editUser ? htmlspecialchars($editUser['username']) : '' ?>" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <input type="password" name="password" placeholder="<?= $editUser ? 'New password (leave blank to keep current)' : 'Password' ?>" <?= $editUser ? '' : 'required' ?> class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <select name="role" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                <option value="user">user (view due dates only)</option>
-                <option value="admin">admin (full access)</option>
+                <option value="user" <?= $editUser && $editUser['role'] === 'user' ? 'selected' : '' ?>>user (view due dates only)</option>
+                <option value="admin" <?= $editUser && $editUser['role'] === 'admin' ? 'selected' : '' ?>>admin (full access)</option>
             </select>
-            <input type="email" name="email" placeholder="Email" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <button type="submit" name="add_user" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Add User</button>
+            <input type="email" name="email" placeholder="Email" value="<?= $editUser ? htmlspecialchars($editUser['email'] ?? '') : '' ?>" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <button type="submit" name="<?= $editUser ? 'update_user' : 'add_user' ?>" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer"><?= $editUser ? 'Save Changes' : 'Add User' ?></button>
+            <?php if ($editUser): ?>
+                <a href="users.php" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</a>
+            <?php endif; ?>
         </form>
     </div>
 
@@ -89,8 +134,9 @@ include __DIR__ . '/../includes/layout_start.php';
                     <td class="px-3 py-2"><?= htmlspecialchars($u['role']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($u['email']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($u['created_at']) ?></td>
-                    <td class="px-3 py-2">
-                        <form method="POST" onsubmit="return confirm('Delete this user?');" style="margin:0;">
+                    <td class="px-3 py-2 whitespace-nowrap">
+                        <a href="?edit=<?= $u['id'] ?>" class="px-3 py-1.5 rounded-md bg-brand-dark text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Edit</a>
+                        <form method="POST" onsubmit="return confirm('Delete this user?');" style="display:inline-block; margin:0;">
                             <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
                             <button type="submit" name="delete_user" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                         </form>
