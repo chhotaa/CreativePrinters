@@ -50,8 +50,10 @@ include __DIR__ . '/../includes/layout_start.php';
         </form>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5 overflow-x-auto">
-        <table class="w-full text-sm border-collapse">
+    <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
+        <input type="text" placeholder="Search purchase orders..." oninput="filterTable(this, 'poTable')" class="w-full sm:w-64 mb-3 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+        <div class="overflow-x-auto">
+        <table id="poTable" class="w-full text-sm border-collapse">
             <thead>
                 <tr class="bg-brand-dark text-white">
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">PO Number</th>
@@ -64,7 +66,7 @@ include __DIR__ . '/../includes/layout_start.php';
             </thead>
             <tbody>
             <?php foreach ($pos as $po): ?>
-                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                <tr class="border-b border-slate-100 even:bg-slate-50 hover:bg-slate-100">
                     <td class="px-3 py-2"><?= htmlspecialchars($po['po_number']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['po_date']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['customer_name']) ?></td>
@@ -75,5 +77,6 @@ include __DIR__ . '/../includes/layout_start.php';
             <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
     </div>
 <?php include __DIR__ . '/../includes/layout_end.php'; ?>

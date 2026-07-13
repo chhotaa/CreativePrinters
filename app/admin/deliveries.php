@@ -86,8 +86,10 @@ include __DIR__ . '/../includes/layout_start.php';
         </form>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5 overflow-x-auto">
-        <table class="w-full text-sm border-collapse">
+    <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
+        <input type="text" placeholder="Search deliveries..." oninput="filterTable(this, 'deliveriesTable')" class="w-full sm:w-64 mb-3 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+        <div class="overflow-x-auto">
+        <table id="deliveriesTable" class="w-full text-sm border-collapse">
             <thead>
                 <tr class="bg-brand-dark text-white">
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">PO Number</th>
@@ -143,5 +145,6 @@ include __DIR__ . '/../includes/layout_start.php';
             <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
     </div>
 <?php include __DIR__ . '/../includes/layout_end.php'; ?>
