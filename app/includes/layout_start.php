@@ -9,11 +9,13 @@ $adminNavItems = [
     'purchase_orders.php' => 'Purchase Orders',
     'deliveries.php' => 'Delivery Schedule',
     'restock_orders.php' => 'Restock Orders',
+    'job_cards.php' => 'Job Cards',
     'change_password.php' => 'Change Password',
 ];
 $userNavItems = [
     'dues.php' => 'Delivery Due Dates',
     'restock_orders.php' => 'Restock Orders',
+    'job_cards.php' => 'Job Cards',
     'change_password.php' => 'Change Password',
 ];
 // Based on which directory the current page lives in (not the viewer's

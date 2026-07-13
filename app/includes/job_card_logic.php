@@ -1,0 +1,118 @@
+<?php
+$message = $message ?? '';
+$error = $error ?? '';
+$currentRole = currentUser()['role'] ?? null;
+$isAdmin = $currentRole === 'admin';
+
+$allowedOrderTypes = ['Sample', 'Bulk Production', 'Repeat Order'];
+$allowedPlateTypes = ['New', 'Old'];
+$allowedDiePunching = ['New', 'Old'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['add_job_card'])) {
+        $jobDate = $_POST['job_date'] ?: date('Y-m-d');
+        $productName = trim($_POST['product_name'] ?? '');
+        $designName = trim($_POST['design_name'] ?? '');
+        $boardNameGsm = trim($_POST['board_name_gsm'] ?? '');
+        $boardSize = trim($_POST['board_size'] ?? '');
+        $cuttingSize = trim($_POST['cutting_size'] ?? '');
+        $boardQuantity = trim($_POST['board_quantity'] ?? '');
+        $copies = trim($_POST['copies'] ?? '');
+        $colour = trim($_POST['colour'] ?? '');
+        $laminationVarnish = trim($_POST['lamination_varnish'] ?? '');
+        $orderType = $_POST['order_type'] ?? '';
+        $plateType = $_POST['plate_type'] ?? '';
+        $diePunching = $_POST['die_punching'] ?? '';
+        $pastingPerforation = isset($_POST['pasting_perforation']) ? 1 : 0;
+        $pastingDoubleBoard = isset($_POST['pasting_double_board']) ? 1 : 0;
+
+        if ($productName === '') {
+            $error = 'Name is required.';
+        } elseif (!in_array($orderType, $allowedOrderTypes, true)) {
+            $error = 'Please select a valid order type.';
+        } elseif (!in_array($plateType, $allowedPlateTypes, true)) {
+            $error = 'Please select a valid plate type.';
+        } elseif ($diePunching !== '' && !in_array($diePunching, $allowedDiePunching, true)) {
+            $error = 'Please select a valid die punching option.';
+        } else {
+            $stmt = $pdo->prepare(
+                'INSERT INTO job_cards
+                    (job_date, product_name, design_name, board_name_gsm, board_size, cutting_size,
+                     board_quantity, copies, colour, lamination_varnish, order_type, plate_type,
+                     die_punching, pasting_perforation, pasting_double_board, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([
+                $jobDate, $productName, $designName ?: null, $boardNameGsm ?: null, $boardSize ?: null,
+                $cuttingSize ?: null, $boardQuantity ?: null, $copies ?: null, $colour ?: null,
+                $laminationVarnish ?: null, $orderType, $plateType, $diePunching ?: null,
+                $pastingPerforation, $pastingDoubleBoard, $_SESSION['user_id'],
+            ]);
+            $message = 'Job card #' . str_pad((string)$pdo->lastInsertId(), 2, '0', STR_PAD_LEFT) . ' created.';
+        }
+    } elseif (isset($_POST['update_job_card'])) {
+        if (!$isAdmin) {
+            $error = 'Only admins can edit job cards.';
+        } else {
+            $id = (int)$_POST['job_card_id'];
+            $jobDate = $_POST['job_date'] ?: date('Y-m-d');
+            $productName = trim($_POST['product_name'] ?? '');
+            $designName = trim($_POST['design_name'] ?? '');
+            $boardNameGsm = trim($_POST['board_name_gsm'] ?? '');
+            $boardSize = trim($_POST['board_size'] ?? '');
+            $cuttingSize = trim($_POST['cutting_size'] ?? '');
+            $boardQuantity = trim($_POST['board_quantity'] ?? '');
+            $copies = trim($_POST['copies'] ?? '');
+            $colour = trim($_POST['colour'] ?? '');
+            $laminationVarnish = trim($_POST['lamination_varnish'] ?? '');
+            $orderType = $_POST['order_type'] ?? '';
+            $plateType = $_POST['plate_type'] ?? '';
+            $diePunching = $_POST['die_punching'] ?? '';
+            $pastingPerforation = isset($_POST['pasting_perforation']) ? 1 : 0;
+            $pastingDoubleBoard = isset($_POST['pasting_double_board']) ? 1 : 0;
+
+            if ($productName === '') {
+                $error = 'Name is required.';
+            } elseif (!in_array($orderType, $allowedOrderTypes, true)) {
+                $error = 'Please select a valid order type.';
+            } elseif (!in_array($plateType, $allowedPlateTypes, true)) {
+                $error = 'Please select a valid plate type.';
+            } elseif ($diePunching !== '' && !in_array($diePunching, $allowedDiePunching, true)) {
+                $error = 'Please select a valid die punching option.';
+            } else {
+                $stmt = $pdo->prepare(
+                    'UPDATE job_cards SET
+                        job_date = ?, product_name = ?, design_name = ?, board_name_gsm = ?, board_size = ?,
+                        cutting_size = ?, board_quantity = ?, copies = ?, colour = ?, lamination_varnish = ?,
+                        order_type = ?, plate_type = ?, die_punching = ?, pasting_perforation = ?, pasting_double_board = ?
+                     WHERE id = ?'
+                );
+                $stmt->execute([
+                    $jobDate, $productName, $designName ?: null, $boardNameGsm ?: null, $boardSize ?: null,
+                    $cuttingSize ?: null, $boardQuantity ?: null, $copies ?: null, $colour ?: null,
+                    $laminationVarnish ?: null, $orderType, $plateType, $diePunching ?: null,
+                    $pastingPerforation, $pastingDoubleBoard, $id,
+                ]);
+                $message = 'Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' updated.';
+            }
+        }
+    } elseif (isset($_POST['delete_job_card'])) {
+        if (!$isAdmin) {
+            $error = 'Only admins can delete job cards.';
+        } else {
+            $id = (int)$_POST['job_card_id'];
+            $stmt = $pdo->prepare('DELETE FROM job_cards WHERE id = ?');
+            $stmt->execute([$id]);
+            $message = 'Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' deleted.';
+        }
+    }
+}
+
+$editJobCard = null;
+if ($isAdmin && isset($_GET['edit'])) {
+    $editStmt = $pdo->prepare('SELECT * FROM job_cards WHERE id = ?');
+    $editStmt->execute([(int)$_GET['edit']]);
+    $editJobCard = $editStmt->fetch();
+}
+
+$jobCards = $pdo->query('SELECT * FROM job_cards ORDER BY id DESC')->fetchAll();
