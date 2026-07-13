@@ -51,7 +51,19 @@ include __DIR__ . '/../includes/layout_start.php';
     </div>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
-        <input type="text" placeholder="Search purchase orders..." oninput="filterTable(this, 'poTable')" class="w-full sm:w-64 mb-3 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <input type="text" id="poTableSearch" placeholder="Search purchase orders..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <label class="flex items-center gap-2 text-sm text-slate-600">
+                Show
+                <select id="poTablePageSize" class="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="all">All</option>
+                </select>
+                entries
+            </label>
+        </div>
         <div class="overflow-x-auto">
         <table id="poTable" class="w-full text-sm border-collapse">
             <thead>
@@ -77,6 +89,13 @@ include __DIR__ . '/../includes/layout_start.php';
             <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm text-slate-600">
+            <span id="poTableInfo"></span>
+            <div class="flex gap-2">
+                <button type="button" id="poTablePrev" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+                <button type="button" id="poTableNext" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+            </div>
         </div>
     </div>
 <?php include __DIR__ . '/../includes/layout_end.php'; ?>
