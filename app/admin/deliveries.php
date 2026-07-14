@@ -66,6 +66,7 @@ $pos = $pdo->query(
      FROM purchase_orders po
      LEFT JOIN deliveries d ON d.po_id = po.id
      GROUP BY po.id, po.po_number, po.customer_name, po.item_code, po.total_quantity
+     HAVING remaining_quantity > 0
      ORDER BY po.po_number"
 )->fetchAll();
 
@@ -80,18 +81,73 @@ include __DIR__ . '/../includes/layout_start.php';
 ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add Delivery Due Date</h3>
-        <form method="POST" class="flex flex-wrap gap-2 items-center">
-            <select name="po_id" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green min-w-[220px]">
-                <option value="">Select PO Number</option>
-                <?php foreach ($pos as $po): ?>
-                    <option value="<?= $po['id'] ?>"><?= htmlspecialchars($po['po_number']) ?> - <?= htmlspecialchars($po['item_code']) ?> - <?= htmlspecialchars($po['customer_name']) ?> (<?= (int)$po['remaining_quantity'] ?> of <?= (int)$po['total_quantity'] ?> remaining)</option>
-                <?php endforeach; ?>
-            </select>
+        <form method="POST" class="flex flex-wrap gap-2 items-center" id="addDeliveryForm">
+            <div class="relative po-search-wrap min-w-[260px]">
+                <input type="text" id="poSearchInput" placeholder="Select PO Number" autocomplete="off" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <input type="hidden" name="po_id" id="poIdInput">
+                <div id="poSearchResults" class="hidden absolute z-10 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-slate-300 rounded-md shadow-lg"></div>
+            </div>
             <input type="date" name="due_date" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="number" name="quantity" placeholder="Quantity for this date" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-48">
             <button type="submit" name="add_delivery" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Add Delivery Date</button>
         </form>
     </div>
+    <script>
+        (function () {
+            var poOptions = <?= json_encode(array_map(function ($po) {
+                return [
+                    'id' => $po['id'],
+                    'label' => $po['po_number'] . ' - ' . $po['item_code'] . ' - ' . $po['customer_name'],
+                ];
+            }, $pos), JSON_UNESCAPED_SLASHES) ?>;
+
+            var input = document.getElementById('poSearchInput');
+            var hidden = document.getElementById('poIdInput');
+            var results = document.getElementById('poSearchResults');
+
+            function renderResults(filter) {
+                var matches = poOptions.filter(function (po) {
+                    return po.label.toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+                });
+                results.innerHTML = '';
+                if (matches.length === 0) {
+                    results.classList.add('hidden');
+                    return;
+                }
+                matches.forEach(function (po) {
+                    var item = document.createElement('div');
+                    item.textContent = po.label;
+                    item.className = 'px-3 py-2 text-sm cursor-pointer hover:bg-slate-100';
+                    item.addEventListener('click', function () {
+                        input.value = po.label;
+                        hidden.value = po.id;
+                        results.classList.add('hidden');
+                    });
+                    results.appendChild(item);
+                });
+                results.classList.remove('hidden');
+            }
+
+            input.addEventListener('focus', function () { renderResults(input.value); });
+            input.addEventListener('input', function () {
+                hidden.value = '';
+                renderResults(input.value);
+            });
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('.po-search-wrap')) {
+                    results.classList.add('hidden');
+                }
+            });
+            document.getElementById('addDeliveryForm').addEventListener('submit', function (e) {
+                if (!hidden.value) {
+                    e.preventDefault();
+                    input.focus();
+                    results.classList.remove('hidden');
+                    renderResults(input.value);
+                }
+            });
+        })();
+    </script>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">

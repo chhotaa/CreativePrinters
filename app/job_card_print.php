@@ -25,29 +25,28 @@ function jcCheck($checked) {
 <title>Job Card #<?= str_pad((string)$jobCard['id'], 2, '0', STR_PAD_LEFT) ?> - Creative Printers</title>
 <style>
     * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f0f0f0; color: #1a1a1a; }
-    .sheet { max-width: 900px; margin: 0 auto; background: #fff; border: 2px solid #1a1a1a; border-radius: 10px; padding: 30px; }
+    @page { size: 7.5in 8in; margin: 0.3in; }
+    body { font-family: 'Flama Condensed Medium', 'Flama Condensed', 'Arial Narrow', Arial, sans-serif; font-size: 12pt; margin: 0; padding: 20px; background: #f0f0f0; color: #1a1a1a; }
+    .sheet { max-width: 720px; margin: 0 auto; background: #fff; border: 2px solid #1a1a1a; border-radius: 10px; padding: 24px; }
     .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
-    .company { display: flex; align-items: center; gap: 16px; }
-    .company img { max-width: 90px; height: auto; flex-shrink: 0; }
-    .company-address { font-size: 13px; color: #333; line-height: 1.5; }
-    .meta { text-align: right; font-size: 15px; }
+    .company-logo { max-width: 260px; height: auto; }
+    .meta { text-align: right; }
     .meta div { margin-bottom: 10px; }
     .meta .dotted { display: inline-block; min-width: 100px; border-bottom: 1px dotted #999; padding-bottom: 2px; font-weight: bold; }
-    .divider { border: none; border-top: 2px solid #1a1a1a; margin: 20px 0; }
-    .title-pill { background: #1a1a1a; color: #fff; text-align: center; padding: 8px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-bottom: 25px; }
-    .body-grid { display: flex; gap: 30px; flex-wrap: wrap; }
+    .divider { border: none; border-top: 2px solid #1a1a1a; margin: 16px 0; }
+    .title-pill { background: #1a1a1a; color: #fff; text-align: center; padding: 8px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-bottom: 18px; }
+    .body-grid { display: flex; gap: 24px; flex-wrap: wrap; }
     .fields { flex: 1.6; min-width: 280px; }
-    .field-row { display: flex; margin-bottom: 28px; }
+    .field-row { display: flex; margin-bottom: 20px; }
     .field-label { width: 150px; flex-shrink: 0; color: #333; }
     .field-value { flex: 1; border-bottom: 1px dotted #999; font-weight: bold; padding-bottom: 3px; }
     .options { flex: 1; min-width: 220px; }
-    .option-group-label { background: #1a1a1a; color: #fff; display: inline-block; padding: 4px 10px; font-weight: bold; font-size: 13px; border-radius: 3px; margin-bottom: 8px; margin-top: 12px; }
-    .option-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
+    .option-group-label { background: #1a1a1a; color: #fff; display: inline-block; padding: 4px 10px; font-weight: bold; border-radius: 3px; margin-bottom: 8px; margin-top: 10px; }
+    .option-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .option-box { width: 60px; height: 24px; border: 1px solid #333; border-radius: 3px; text-align: center; font-weight: bold; }
-    .footer-title { background: #1a1a1a; color: #fff; text-align: center; padding: 8px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-top: 30px; }
-    .details-box { min-height: 100px; padding: 12px 4px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
-    .print-bar { max-width: 900px; margin: 0 auto 15px; text-align: right; }
+    .footer-title { background: #1a1a1a; color: #fff; text-align: center; padding: 8px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-top: 20px; }
+    .details-box { min-height: 70px; padding: 10px 4px; line-height: 1.5; white-space: pre-wrap; }
+    .print-bar { max-width: 720px; margin: 0 auto 15px; text-align: right; }
     .print-btn { background: #9acd32; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; }
     .print-btn:hover { background: #7fae22; }
     @media print {
@@ -63,14 +62,7 @@ function jcCheck($checked) {
     </div>
     <div class="sheet">
         <div class="header">
-            <div class="company">
-                <img src="../image/Creative Card.cdr New_Page_1.jpg" alt="Creative Printing Solution">
-                <div class="company-address">
-                    30/1, Rajalingapuram, Sengunthapuram 6th Cross,<br>
-                    Karur- 639 002.<br>
-                    M: +91 90470 07788
-                </div>
-            </div>
+            <img src="../image/job_card_header.png" alt="Creative Printing Solution" class="company-logo">
             <div class="meta">
                 <div>Sl.No. : <span class="dotted"><?= str_pad((string)$jobCard['id'], 2, '0', STR_PAD_LEFT) ?></span></div>
                 <div>Date : <span class="dotted"><?= htmlspecialchars(date('d.m.Y', strtotime($jobCard['job_date']))) ?></span></div>
