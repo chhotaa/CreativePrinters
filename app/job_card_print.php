@@ -47,18 +47,23 @@ function jcCheck($checked) {
     .footer-title { background: #1a1a1a; color: #fff; text-align: center; padding: 6px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-top: 10px; }
     .details-box { min-height: 50px; padding: 6px 4px; line-height: 1.4; white-space: pre-wrap; }
     .print-bar { max-width: 720px; margin: 0 auto 15px; text-align: right; }
-    .print-btn { background: #9acd32; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .print-btn { background: #9acd32; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; margin-left: 8px; }
     .print-btn:hover { background: #7fae22; }
+    .print-btn:disabled { opacity: 0.6; cursor: default; }
+    .print-btn.pdf-btn { background: #2f4f4f; }
+    .print-btn.pdf-btn:hover { background: #26403f; }
     @media print {
         body { background: #fff; padding: 0; }
         .no-print { display: none; }
         .sheet { border: 2px solid #000; box-shadow: none; margin: 0; max-width: 100%; }
     }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
     <div class="print-bar no-print">
         <button class="print-btn" onclick="window.print()">Print</button>
+        <button class="print-btn pdf-btn" id="downloadPdfBtn" onclick="downloadPdf()">Download PDF</button>
     </div>
     <div class="sheet">
         <div class="header">
@@ -104,5 +109,30 @@ function jcCheck($checked) {
         <div class="footer-title">DETAILS</div>
         <div class="details-box"><?= $jobCard['details'] !== null && $jobCard['details'] !== '' ? htmlspecialchars($jobCard['details']) : '&nbsp;' ?></div>
     </div>
+    <script>
+        function downloadPdf() {
+            var btn = document.getElementById('downloadPdfBtn');
+            var originalLabel = btn.textContent;
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+            html2pdf().set({
+                margin: 0,
+                filename: 'Job_Card_<?= str_pad((string)$jobCard['id'], 2, '0', STR_PAD_LEFT) ?>.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    ignoreElements: function (el) { return el.classList.contains('no-print'); }
+                },
+                jsPDF: { unit: 'in', format: [7.5, 8], orientation: 'portrait' }
+            }).from(document.querySelector('.sheet')).save().then(function () {
+                btn.textContent = originalLabel;
+                btn.disabled = false;
+            }).catch(function () {
+                btn.textContent = originalLabel;
+                btn.disabled = false;
+                alert('Could not generate the PDF. Please try again.');
+            });
+        }
+    </script>
 </body>
 </html>
