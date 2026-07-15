@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS deliveries (
   due_date DATE NOT NULL,
   quantity INT NOT NULL,
   status ENUM('Pending','Shipped','Delivered') NOT NULL DEFAULT 'Pending',
+  dc_number VARCHAR(100) NULL,
+  invoice_number VARCHAR(100) NULL,
+  dc_date DATE NULL,
+  bill_date DATE NULL,
   reminder_sent ENUM('No','Yes') NOT NULL DEFAULT 'No',
   FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
