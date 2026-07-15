@@ -25,28 +25,28 @@ function jcCheck($checked) {
 <title>Job Card #<?= str_pad((string)$jobCard['id'], 2, '0', STR_PAD_LEFT) ?> - Creative Printers</title>
 <style>
     * { box-sizing: border-box; }
-    @page { size: 185mm 8in; margin: 0.3in; }
+    @page { size: 170mm 185mm; margin: 0.3in; }
     body { font-family: 'Flama Condensed Medium', 'Flama Condensed', 'Arial Narrow', Arial, sans-serif; font-size: 12pt; margin: 0; padding: 20px; background: #f0f0f0; color: #1a1a1a; }
-    .sheet { max-width: 185mm; margin: 0 auto; background: #fff; border: 2px solid #1a1a1a; border-radius: 10px; padding: 16px; }
+    .sheet { max-width: 170mm; margin: 0 auto; background: #fff; border: 2px solid #1a1a1a; border-radius: 10px; padding: 16px; }
     .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
     .company-logo { max-width: 220px; height: auto; }
     .meta { text-align: right; }
     .meta div { margin-bottom: 6px; }
-    .meta .dotted { display: inline-block; min-width: 100px; border-bottom: 1px dotted #999; padding-bottom: 2px; font-weight: bold; }
+    .meta .dotted { display: inline-block; min-width: 100px; border-bottom: 1px dotted #999; padding-bottom: 2px; }
     .divider { border: none; border-top: 2px solid #1a1a1a; margin: 10px 0; }
-    .title-pill { background: #1a1a1a; color: #fff; text-align: center; padding: 6px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-bottom: 10px; }
+    .title-pill { background: #1a1a1a; color: #fff; text-align: center; padding: 6px; letter-spacing: 1px; border-radius: 4px; margin-bottom: 10px; }
     .body-grid { display: flex; gap: 24px; flex-wrap: wrap; }
     .fields { flex: 1.6; min-width: 280px; }
     .field-row { display: flex; margin-bottom: 10px; }
     .field-label { width: 150px; flex-shrink: 0; color: #333; }
-    .field-value { flex: 1; border-bottom: 1px dotted #999; font-weight: bold; padding-bottom: 3px; }
+    .field-value { flex: 1; border-bottom: 1px dotted #999; padding-bottom: 3px; }
     .options { flex: 1; min-width: 220px; }
-    .option-group-label { background: #1a1a1a; color: #fff; display: inline-block; padding: 3px 10px; font-weight: bold; border-radius: 3px; margin-bottom: 4px; margin-top: 6px; }
+    .option-group-label { background: #1a1a1a; color: #fff; display: inline-block; padding: 3px 10px; border-radius: 3px; margin-bottom: 4px; margin-top: 6px; }
     .option-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    .option-box { width: 60px; height: 22px; border: 1px solid #333; border-radius: 3px; text-align: center; font-weight: bold; }
-    .footer-title { background: #1a1a1a; color: #fff; text-align: center; padding: 6px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-top: 10px; }
+    .option-box { width: 60px; height: 22px; border: 1px solid #333; border-radius: 3px; text-align: center; }
+    .footer-title { background: #1a1a1a; color: #fff; text-align: center; padding: 6px; letter-spacing: 1px; border-radius: 4px; margin-top: 10px; }
     .details-box { min-height: 50px; padding: 6px 4px; line-height: 1.4; white-space: pre-wrap; }
-    .print-bar { max-width: 185mm; margin: 0 auto 15px; text-align: right; }
+    .print-bar { max-width: 170mm; margin: 0 auto 15px; text-align: right; }
     .print-btn { background: #9acd32; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; margin-left: 8px; }
     .print-btn:hover { background: #7fae22; }
     .print-btn:disabled { opacity: 0.6; cursor: default; }
@@ -123,7 +123,7 @@ function jcCheck($checked) {
                     scale: 2,
                     ignoreElements: function (el) { return el.classList.contains('no-print'); }
                 },
-                jsPDF: { unit: 'mm', format: [185, 203.2], orientation: 'portrait' }
+                jsPDF: { unit: 'mm', format: [170, 185], orientation: 'portrait' }
             }).from(document.querySelector('.sheet')).save().then(function () {
                 btn.textContent = originalLabel;
                 btn.disabled = false;
