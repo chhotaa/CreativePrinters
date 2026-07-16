@@ -101,28 +101,51 @@ include __DIR__ . '/includes/layout_start.php';
         <p class="text-sm text-slate-500 mt-2">A new role starts with no access anywhere — set its permissions below once created.</p>
     </div>
 
-    <p class="text-sm text-slate-500 mb-4">"Super Admin" always has full access everywhere and isn't shown here. Each role's permissions save independently — changing one role does not affect the others.</p>
+    <p class="text-sm text-slate-500 mb-4">"Super Admin" always has full access everywhere and isn't shown here. Each role's column saves independently — changing one role does not affect the others.</p>
 
     <?php foreach ($roles as $role): ?>
-        <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
-            <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= htmlspecialchars($role['name']) ?></h3>
-            <form method="POST">
-                <input type="hidden" name="role_id" value="<?= $role['id'] ?>">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
-                    <?php foreach ($modules as $moduleKey => $label): ?>
+        <form method="POST" id="role-form-<?= $role['id'] ?>">
+            <input type="hidden" name="role_id" value="<?= $role['id'] ?>">
+        </form>
+    <?php endforeach; ?>
+
+    <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
+        <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+            <thead>
+                <tr class="bg-brand-dark text-white">
+                    <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Module</th>
+                    <?php foreach ($roles as $i => $role): ?>
+                        <th class="text-left px-3 py-2 font-semibold <?= $i === count($roles) - 1 ? 'rounded-tr-md' : '' ?>"><?= htmlspecialchars($role['name']) ?></th>
+                    <?php endforeach; ?>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($modules as $moduleKey => $label): ?>
+                <tr class="border-b border-slate-100 even:bg-slate-50">
+                    <td class="px-3 py-2 font-semibold text-brand-dark whitespace-nowrap"><?= htmlspecialchars($label) ?></td>
+                    <?php foreach ($roles as $role): ?>
                         <?php $current = $currentPermissions[$role['id']][$moduleKey] ?? 'none'; ?>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500 mb-1"><?= htmlspecialchars($label) ?></label>
-                            <select name="permissions[<?= $moduleKey ?>]" class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                        <td class="px-3 py-2">
+                            <select name="permissions[<?= $moduleKey ?>]" form="role-form-<?= $role['id'] ?>" class="w-full min-w-[90px] px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
                                 <?php foreach ($accessLevels as $level => $levelLabel): ?>
                                     <option value="<?= $level ?>" <?= $current === $level ? 'selected' : '' ?>><?= $levelLabel ?></option>
                                 <?php endforeach; ?>
                             </select>
-                        </div>
+                        </td>
                     <?php endforeach; ?>
-                </div>
-                <button type="submit" name="save_role_permissions" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Save <?= htmlspecialchars($role['name']) ?> Permissions</button>
-            </form>
+                </tr>
+            <?php endforeach; ?>
+            <tr>
+                <td class="px-3 py-3"></td>
+                <?php foreach ($roles as $role): ?>
+                    <td class="px-3 py-3">
+                        <button type="submit" name="save_role_permissions" value="1" form="role-form-<?= $role['id'] ?>" class="w-full px-3 py-1.5 rounded-md bg-brand-green text-white text-xs font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Save</button>
+                    </td>
+                <?php endforeach; ?>
+            </tr>
+            </tbody>
+        </table>
         </div>
-    <?php endforeach; ?>
+    </div>
 <?php include __DIR__ . '/includes/layout_end.php'; ?>
