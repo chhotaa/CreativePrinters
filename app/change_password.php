@@ -1,12 +1,12 @@
 <?php
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-requireAdmin();
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+requireLogin();
 
-require __DIR__ . '/../includes/change_password_logic.php';
+require __DIR__ . '/includes/change_password_logic.php';
 
 $pageTitle = 'Change Password';
-include __DIR__ . '/../includes/layout_start.php';
+include __DIR__ . '/includes/layout_start.php';
 ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5 max-w-md mx-auto">
         <form method="POST" class="space-y-3">
@@ -16,4 +16,4 @@ include __DIR__ . '/../includes/layout_start.php';
             <button type="submit" name="change_password" value="1" class="w-full px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Change Password</button>
         </form>
     </div>
-<?php include __DIR__ . '/../includes/layout_end.php'; ?>
+<?php include __DIR__ . '/includes/layout_end.php'; ?>

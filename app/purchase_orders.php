@@ -1,13 +1,15 @@
 <?php
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/flash.php';
-requireAdmin();
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/flash.php';
+require_once __DIR__ . '/includes/activity_log.php';
+requirePermission('purchase_orders', 'view');
+$canEdit = hasPermission('purchase_orders', 'edit');
 
 $message = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
+if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
     $poNumber = trim($_POST['po_number'] ?? '');
     $poDate = $_POST['po_date'] ?: null;
     $customer = trim($_POST['customer_name'] ?? '');
@@ -74,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
                         $pdo->commit();
                         $count = count($items);
                         setFlashMessage("Purchase order saved with $count item" . ($count === 1 ? '' : 's') . '. Now add delivery due dates on the Delivery Schedule page.');
+                        logActivity('create_purchase_order', "Created Purchase Order $poNumber with $count item" . ($count === 1 ? '' : 's') . '.');
                         header('Location: purchase_orders.php');
                         exit;
                     } catch (Exception $e) {
@@ -88,8 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
 
 $pos = $pdo->query('SELECT * FROM purchase_orders ORDER BY po_date DESC, id DESC')->fetchAll();
 $pageTitle = 'Purchase Orders';
-include __DIR__ . '/../includes/layout_start.php';
+include __DIR__ . '/includes/layout_start.php';
 ?>
+    <?php if ($canEdit): ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add Purchase Order</h3>
         <p class="text-sm text-slate-500 mb-3">Enter the PO number and customer once, then add as many item rows as this PO covers in a single save.</p>
@@ -130,6 +134,7 @@ include __DIR__ . '/../includes/layout_start.php';
             }
         }
     </script>
+    <?php endif; ?>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -179,4 +184,4 @@ include __DIR__ . '/../includes/layout_start.php';
             </div>
         </div>
     </div>
-<?php include __DIR__ . '/../includes/layout_end.php'; ?>
+<?php include __DIR__ . '/includes/layout_end.php'; ?>

@@ -1,15 +1,15 @@
 <?php
 require_once __DIR__ . '/flash.php';
+require_once __DIR__ . '/activity_log.php';
 $message = $message ?? '';
 $error = $error ?? '';
-$currentRole = currentUser()['role'] ?? null;
-$isAdmin = $currentRole === 'admin';
+$canEdit = hasPermission('job_cards', 'edit');
 
 $allowedOrderTypes = ['Sample', 'Bulk Production', 'Repeat Order'];
 $allowedPlateTypes = ['New', 'Old'];
 $allowedDiePunching = ['New', 'Old'];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_job_card'])) {
         $jobDate = $_POST['job_date'] ?: date('Y-m-d');
         $productName = trim($_POST['product_name'] ?? '');
@@ -50,13 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $laminationVarnish ?: null, $orderType, $plateType, $diePunching ?: null,
                 $pastingPerforation, $pastingDoubleBoard, $details ?: null, $_SESSION['user_id'],
             ]);
-            setFlashMessage('Job card #' . str_pad((string)$pdo->lastInsertId(), 2, '0', STR_PAD_LEFT) . ' created.');
+            $newId = (string)$pdo->lastInsertId();
+            setFlashMessage('Job card #' . str_pad($newId, 2, '0', STR_PAD_LEFT) . ' created.');
+            logActivity('create_job_card', 'Created Job Card #' . str_pad($newId, 2, '0', STR_PAD_LEFT) . " (\"$productName\").");
             header('Location: job_cards.php');
             exit;
         }
     } elseif (isset($_POST['update_job_card'])) {
-        if (!$isAdmin) {
-            $error = 'Only admins can edit job cards.';
+        if (!$canEdit) {
+            $error = 'You do not have permission to edit job cards.';
         } else {
             $id = (int)$_POST['job_card_id'];
             $jobDate = $_POST['job_date'] ?: date('Y-m-d');
@@ -100,18 +102,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pastingPerforation, $pastingDoubleBoard, $details ?: null, $id,
                 ]);
                 setFlashMessage('Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' updated.');
+                logActivity('update_job_card', 'Updated Job Card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . " (\"$productName\").");
                 header('Location: job_cards.php');
                 exit;
             }
         }
     } elseif (isset($_POST['delete_job_card'])) {
-        if (!$isAdmin) {
-            $error = 'Only admins can delete job cards.';
+        if (!$canEdit) {
+            $error = 'You do not have permission to delete job cards.';
         } else {
             $id = (int)$_POST['job_card_id'];
+            $nameStmt = $pdo->prepare('SELECT product_name FROM job_cards WHERE id = ?');
+            $nameStmt->execute([$id]);
+            $deletedProductName = $nameStmt->fetchColumn();
             $stmt = $pdo->prepare('DELETE FROM job_cards WHERE id = ?');
             $stmt->execute([$id]);
             setFlashMessage('Job card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . ' deleted.');
+            logActivity('delete_job_card', 'Deleted Job Card #' . str_pad((string)$id, 2, '0', STR_PAD_LEFT) . " (\"$deletedProductName\").");
             header('Location: job_cards.php');
             exit;
         }
@@ -119,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $editJobCard = null;
-if ($isAdmin && isset($_GET['edit'])) {
+if ($canEdit && isset($_GET['edit'])) {
     $editStmt = $pdo->prepare('SELECT * FROM job_cards WHERE id = ?');
     $editStmt->execute([(int)$_GET['edit']]);
     $editJobCard = $editStmt->fetch();

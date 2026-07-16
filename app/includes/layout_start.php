@@ -5,29 +5,21 @@ $message = (isset($message) && $message !== '') ? $message : $flashMessage;
 $error = (isset($error) && $error !== '') ? $error : $flashError;
 
 $currentFile = basename($_SERVER['SCRIPT_NAME']);
-$currentDir = basename(dirname($_SERVER['SCRIPT_NAME']));
 
-$adminNavItems = [
-    'index.php' => 'Dashboard',
-    'users.php' => 'Users',
-    'stock.php' => 'Stock',
-    'purchase_orders.php' => 'Purchase Orders',
-    'deliveries.php' => 'Delivery Schedule',
-    'restock_orders.php' => 'Restock Orders',
-    'job_cards.php' => 'Job Cards',
-    'change_password.php' => 'Change Password',
-];
-$userNavItems = [
-    'dues.php' => 'Delivery Due Dates',
-    'restock_orders.php' => 'Restock Orders',
-    'job_cards.php' => 'Job Cards',
-    'change_password.php' => 'Change Password',
-];
-// Based on which directory the current page lives in (not the viewer's
-// role) - an admin can also visit user/ pages (requireLogin, not
-// requireAdmin), and the nav links must match sibling files that
-// actually exist in that same directory.
-$navItems = $currentDir === 'admin' ? $adminNavItems : $userNavItems;
+// Nav is permission-driven: a module link only appears if the viewer's
+// role has at least View on that module. Users/Roles stay Super-Admin-only.
+$navItems = ['index.php' => 'Dashboard'];
+if (hasPermission('stock', 'view')) $navItems['stock.php'] = 'Stock';
+if (hasPermission('purchase_orders', 'view')) $navItems['purchase_orders.php'] = 'Purchase Orders';
+if (hasPermission('deliveries', 'view')) $navItems['deliveries.php'] = 'Delivery Schedule';
+if (hasPermission('restock_orders', 'view')) $navItems['restock_orders.php'] = 'Restock Orders';
+if (hasPermission('job_cards', 'view')) $navItems['job_cards.php'] = 'Job Cards';
+if (hasPermission('activity_log', 'view')) $navItems['activity_log.php'] = 'Activity Log';
+if (currentUser()['role_name'] === 'Super Admin') {
+    $navItems['users.php'] = 'Users';
+    $navItems['roles.php'] = 'Roles & Permissions';
+}
+$navItems['change_password.php'] = 'Change Password';
 $heading = $pageHeading ?? ($pageTitle ?? '');
 ?>
 <!DOCTYPE html>
@@ -43,7 +35,7 @@ $heading = $pageHeading ?? ($pageTitle ?? '');
         <aside class="w-60 shrink-0 bg-brand-dark text-white flex flex-col">
             <div class="px-5 py-5 border-b border-white/10">
                 <span class="font-bold text-lg">Creative Printers</span>
-                <a href="../logout.php" class="mt-3 flex items-center gap-1 text-xs font-semibold text-white/70 hover:text-white transition-colors">&larr; Log Out</a>
+                <a href="logout.php" class="mt-3 flex items-center gap-1 text-xs font-semibold text-white/70 hover:text-white transition-colors">&larr; Log Out</a>
             </div>
             <nav class="flex-1 py-3">
                 <?php foreach ($navItems as $navFile => $navLabel): ?>

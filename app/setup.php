@@ -17,9 +17,16 @@ $defaultUsername = 'admin';
 $defaultPassword = 'ChangeMe123'; // change this immediately after logging in
 $defaultEmail = 'youremail@example.com'; // change to your real email for reminders
 
+$roleStmt = $pdo->prepare('SELECT id FROM roles WHERE name = ?');
+$roleStmt->execute(['Super Admin']);
+$superAdminRoleId = $roleStmt->fetchColumn();
+if (!$superAdminRoleId) {
+    die('Setup failed: the "Super Admin" role does not exist. Run the RBAC migration (app/migrations/2026-07-15_add_rbac.sql) first.');
+}
+
 $hash = password_hash($defaultPassword, PASSWORD_DEFAULT);
-$stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)');
-$stmt->execute([$defaultUsername, $hash, 'admin', $defaultEmail]);
+$stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role_id, email) VALUES (?, ?, ?, ?)');
+$stmt->execute([$defaultUsername, $hash, $superAdminRoleId, $defaultEmail]);
 
 echo "Setup complete.<br>";
 echo "Username: <b>$defaultUsername</b><br>";

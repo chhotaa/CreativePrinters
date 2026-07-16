@@ -1,3 +1,4 @@
+    <?php if ($canEdit): ?>
     <?php
     $jc = $editJobCard;
     $val = function ($field, $default = '') use ($jc) {
@@ -96,6 +97,7 @@
             </div>
         </form>
     </div>
+    <?php endif; ?>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -132,8 +134,8 @@
                     <td class="px-3 py-2"><?= htmlspecialchars($row['design_name'] ?? '') ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($row['order_type']) ?></td>
                     <td class="px-3 py-2 whitespace-nowrap">
-                        <a href="../job_card_print.php?id=<?= $row['id'] ?>" target="_blank" class="px-3 py-1.5 rounded-md bg-brand-dark text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Print</a>
-                        <?php if ($isAdmin): ?>
+                        <a href="job_card_print.php?id=<?= $row['id'] ?>" target="_blank" class="px-3 py-1.5 rounded-md bg-brand-dark text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Print</a>
+                        <?php if ($canEdit): ?>
                             <a href="?edit=<?= $row['id'] ?>" class="px-3 py-1.5 rounded-md bg-slate-600 text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Edit</a>
                             <form method="POST" onsubmit="return confirm('Delete this job card?');" style="display:inline-block; margin:0;">
                                 <input type="hidden" name="job_card_id" value="<?= $row['id'] ?>">

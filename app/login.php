@@ -1,9 +1,10 @@
 <?php
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/activity_log.php';
 
 if (isset($_SESSION['user_id'])) {
-    redirectToDashboard($_SESSION['role']);
+    redirectToDashboard();
 }
 
 $error = '';
@@ -20,10 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password_hash'])) {
             $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['role'] = $user['role'];
-            redirectToDashboard($user['role']);
+            logActivity('login_success', 'Logged in.');
+            redirectToDashboard();
         } else {
+            logActivity('login_failed', "Failed login attempt for username \"$username\".", $username);
             $error = 'Invalid username or password.';
         }
     }

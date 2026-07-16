@@ -1,13 +1,15 @@
 <?php
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/flash.php';
-requireAdmin();
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/flash.php';
+require_once __DIR__ . '/includes/activity_log.php';
+requirePermission('stock', 'view');
+$canEdit = hasPermission('stock', 'edit');
 
 $message = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['save_stock'])) {
         $product = trim($_POST['product_name']);
         $qty = (int)$_POST['quantity'];
@@ -22,14 +24,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $stmt->execute([$product, $qty, $reorder]);
             setFlashMessage('Stock saved.');
+            logActivity('save_stock', "Saved stock for \"$product\" (qty: $qty, reorder level: $reorder).");
             header('Location: stock.php');
             exit;
         }
     } elseif (isset($_POST['delete_stock'])) {
         $id = (int)$_POST['stock_id'];
+        $nameStmt = $pdo->prepare('SELECT product_name FROM stock WHERE id = ?');
+        $nameStmt->execute([$id]);
+        $productName = $nameStmt->fetchColumn();
         $stmt = $pdo->prepare('DELETE FROM stock WHERE id = ?');
         $stmt->execute([$id]);
         setFlashMessage('Stock item deleted.');
+        logActivity('delete_stock', "Deleted stock item \"$productName\".");
         header('Location: stock.php');
         exit;
     }
@@ -37,8 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $stockItems = $pdo->query('SELECT * FROM stock ORDER BY product_name')->fetchAll();
 $pageTitle = 'Stock';
-include __DIR__ . '/../includes/layout_start.php';
+include __DIR__ . '/includes/layout_start.php';
 ?>
+    <?php if ($canEdit): ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add / Update Stock</h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center">
@@ -49,6 +57,7 @@ include __DIR__ . '/../includes/layout_start.php';
         </form>
         <p class="text-sm text-slate-500 mt-2">Entering an existing product name updates its quantity/reorder level instead of duplicating it.</p>
     </div>
+    <?php endif; ?>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -71,7 +80,7 @@ include __DIR__ . '/../includes/layout_start.php';
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Product</th>
                     <th class="text-left px-3 py-2 font-semibold">Quantity</th>
                     <th class="text-left px-3 py-2 font-semibold">Reorder Level</th>
-                    <th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th>
+                    <?php if ($canEdit): ?><th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -80,12 +89,14 @@ include __DIR__ . '/../includes/layout_start.php';
                     <td class="px-3 py-2"><?= htmlspecialchars($s['product_name']) ?></td>
                     <td class="px-3 py-2"><?= $s['quantity'] ?></td>
                     <td class="px-3 py-2"><?= $s['reorder_level'] ?></td>
+                    <?php if ($canEdit): ?>
                     <td class="px-3 py-2">
                         <form method="POST" onsubmit="return confirm('Delete this stock item?');" style="margin:0;">
                             <input type="hidden" name="stock_id" value="<?= $s['id'] ?>">
                             <button type="submit" name="delete_stock" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                         </form>
                     </td>
+                    <?php endif; ?>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -99,4 +110,4 @@ include __DIR__ . '/../includes/layout_start.php';
             </div>
         </div>
     </div>
-<?php include __DIR__ . '/../includes/layout_end.php'; ?>
+<?php include __DIR__ . '/includes/layout_end.php'; ?>

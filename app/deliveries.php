@@ -1,13 +1,15 @@
 <?php
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/flash.php';
-requireAdmin();
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/flash.php';
+require_once __DIR__ . '/includes/activity_log.php';
+requirePermission('deliveries', 'view');
+$canEdit = hasPermission('deliveries', 'edit');
 
 $message = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_delivery'])) {
         $poId = (int)$_POST['po_id'];
         $dueDate = $_POST['due_date'];
@@ -16,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$poId || !$dueDate || $qty <= 0) {
             $error = 'PO, due date, and a positive quantity are required.';
         } else {
-            $poStmt = $pdo->prepare('SELECT total_quantity FROM purchase_orders WHERE id = ?');
+            $poStmt = $pdo->prepare('SELECT po_number, total_quantity FROM purchase_orders WHERE id = ?');
             $poStmt->execute([$poId]);
             $po = $poStmt->fetch();
 
@@ -33,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare('INSERT INTO deliveries (po_id, due_date, quantity) VALUES (?, ?, ?)');
                 $stmt->execute([$poId, $dueDate, $qty]);
                 setFlashMessage('Delivery date added.');
+                logActivity('add_delivery', "Added delivery due date $dueDate for PO {$po['po_number']} (qty: $qty).");
                 header('Location: deliveries.php');
                 exit;
             }
@@ -58,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = 'This delivery is already marked Delivered and cannot be changed.';
                 } else {
                     setFlashMessage('Status updated to Delivered.');
+                    logActivity('update_delivery_status', "Marked delivery #$id as Delivered (DC: $dcNumber, Invoice: $invoiceNumber).");
                     header('Location: deliveries.php');
                     exit;
                 }
@@ -69,21 +73,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'This delivery is already marked Delivered and cannot be changed.';
             } else {
                 setFlashMessage('Status updated.');
+                logActivity('update_delivery_status', "Updated delivery #$id status to $status.");
                 header('Location: deliveries.php');
                 exit;
             }
         }
     } elseif (isset($_POST['delete_delivery'])) {
         $id = (int)$_POST['delivery_id'];
+        $poStmt = $pdo->prepare('SELECT po.po_number FROM deliveries d JOIN purchase_orders po ON po.id = d.po_id WHERE d.id = ?');
+        $poStmt->execute([$id]);
+        $poNumber = $poStmt->fetchColumn();
         $stmt = $pdo->prepare('DELETE FROM deliveries WHERE id = ?');
         $stmt->execute([$id]);
         setFlashMessage('Delivery entry deleted.');
+        logActivity('delete_delivery', "Deleted delivery #$id for PO $poNumber.");
         header('Location: deliveries.php');
         exit;
     }
 }
 
-$pos = $pdo->query(
+$pos = $canEdit ? $pdo->query(
     "SELECT po.id, po.po_number, po.customer_name, po.item_code, po.total_quantity,
             po.total_quantity - COALESCE(SUM(d.quantity), 0) AS remaining_quantity
      FROM purchase_orders po
@@ -91,7 +100,7 @@ $pos = $pdo->query(
      GROUP BY po.id, po.po_number, po.customer_name, po.item_code, po.total_quantity
      HAVING remaining_quantity > 0
      ORDER BY po.po_number"
-)->fetchAll();
+)->fetchAll() : [];
 
 $deliveries = $pdo->query(
     "SELECT d.*, po.po_number, po.customer_name, po.item_code, po.description
@@ -100,8 +109,9 @@ $deliveries = $pdo->query(
      ORDER BY d.due_date ASC"
 )->fetchAll();
 $pageTitle = 'Delivery Schedule';
-include __DIR__ . '/../includes/layout_start.php';
+include __DIR__ . '/includes/layout_start.php';
 ?>
+    <?php if ($canEdit): ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add Delivery Due Date</h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center" id="addDeliveryForm">
@@ -171,6 +181,7 @@ include __DIR__ . '/../includes/layout_start.php';
             });
         })();
     </script>
+    <?php endif; ?>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -196,7 +207,7 @@ include __DIR__ . '/../includes/layout_start.php';
                     <th class="text-left px-3 py-2 font-semibold">Due Date</th>
                     <th class="text-left px-3 py-2 font-semibold">Qty</th>
                     <th class="text-left px-3 py-2 font-semibold">Status</th>
-                    <th class="text-left px-3 py-2 font-semibold">Reminder Sent</th>
+                    <?php if ($canEdit): ?><th class="text-left px-3 py-2 font-semibold">Reminder Sent</th><?php endif; ?>
                     <th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th>
                 </tr>
             </thead>
@@ -222,9 +233,8 @@ include __DIR__ . '/../includes/layout_start.php';
                     <td class="px-3 py-2"><?= htmlspecialchars($d['item_code']) ?> - <?= htmlspecialchars($d['description']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($d['due_date']) ?></td>
                     <td class="px-3 py-2"><?= $d['quantity'] ?></td>
-                    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold <?= $badgeClass ?>"><?= htmlspecialchars($d['status']) ?></span></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($d['reminder_sent']) ?></td>
-                    <td class="px-3 py-2 whitespace-nowrap">
+                    <?php if ($canEdit): ?>
+                    <td class="px-3 py-2">
                         <form method="POST" style="display:inline-block; margin:0;">
                             <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                             <select name="status" onchange="handleStatusChange(this)" data-delivery-id="<?= $d['id'] ?>" data-current-status="<?= htmlspecialchars($d['status']) ?>" <?= $d['status'] === 'Delivered' ? 'disabled title="Delivered deliveries cannot be changed"' : '' ?> class="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
@@ -234,15 +244,23 @@ include __DIR__ . '/../includes/layout_start.php';
                             </select>
                             <input type="hidden" name="update_status" value="1">
                         </form>
+                    </td>
+                    <?php else: ?>
+                    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold <?= $badgeClass ?>"><?= htmlspecialchars($d['status']) ?></span></td>
+                    <?php endif; ?>
+                    <?php if ($canEdit): ?><td class="px-3 py-2"><?= htmlspecialchars($d['reminder_sent']) ?></td><?php endif; ?>
+                    <td class="px-3 py-2 whitespace-nowrap">
                         <?php if ($d['status'] === 'Delivered' && $d['dc_number']): ?>
                             <button type="button" onclick="viewDeliveryDetails(<?= $d['id'] ?>)" title="View delivery details" class="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer align-middle">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10 3.5c-4.14 0-7.5 3.5-8.5 6.5 1 3 4.36 6.5 8.5 6.5s7.5-3.5 8.5-6.5c-1-3-4.36-6.5-8.5-6.5zm0 11a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/><circle cx="10" cy="10" r="2"/></svg>
                             </button>
                         <?php endif; ?>
+                        <?php if ($canEdit): ?>
                         <form method="POST" onsubmit="return confirm('Delete this delivery date?');" style="display:inline-block; margin:0;">
                             <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                             <button type="submit" name="delete_delivery" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                         </form>
+                        <?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -258,6 +276,7 @@ include __DIR__ . '/../includes/layout_start.php';
         </div>
     </div>
 
+    <?php if ($canEdit): ?>
     <div id="deliveryDetailsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
             <h3 class="text-lg font-semibold text-brand-dark mb-3">Delivery Details</h3>
@@ -291,6 +310,7 @@ include __DIR__ . '/../includes/layout_start.php';
             </form>
         </div>
     </div>
+    <?php endif; ?>
 
     <div id="viewDetailsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
@@ -320,6 +340,7 @@ include __DIR__ . '/../includes/layout_start.php';
             return $carry;
         }, []), JSON_UNESCAPED_SLASHES) ?>;
 
+        <?php if ($canEdit): ?>
         var activeStatusSelect = null;
 
         function handleStatusChange(select) {
@@ -340,6 +361,7 @@ include __DIR__ . '/../includes/layout_start.php';
             }
             activeStatusSelect = null;
         }
+        <?php endif; ?>
 
         function viewDeliveryDetails(id) {
             var data = deliveryDetailsData[id];
@@ -355,4 +377,4 @@ include __DIR__ . '/../includes/layout_start.php';
             document.getElementById('viewDetailsModal').classList.add('hidden');
         }
     </script>
-<?php include __DIR__ . '/../includes/layout_end.php'; ?>
+<?php include __DIR__ . '/includes/layout_end.php'; ?>

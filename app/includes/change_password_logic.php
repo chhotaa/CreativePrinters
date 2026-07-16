@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/flash.php';
+require_once __DIR__ . '/activity_log.php';
 $message = $message ?? '';
 $error = $error ?? '';
 
@@ -23,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
         $upd = $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
         $upd->execute([$hash, $_SESSION['user_id']]);
         setFlashMessage('Password changed successfully.');
+        logActivity('change_password', 'Changed own password.');
         header('Location: change_password.php');
         exit;
     }

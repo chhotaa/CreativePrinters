@@ -18,7 +18,10 @@ $stmt = $pdo->query(
 $rows = $stmt->fetchAll();
 
 $adminEmails = array_column(
-    $pdo->query("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL AND email <> ''")->fetchAll(),
+    $pdo->query(
+        "SELECT u.email FROM users u JOIN roles r ON r.id = u.role_id
+         WHERE r.name = 'Super Admin' AND u.email IS NOT NULL AND u.email <> ''"
+    )->fetchAll(),
     'email'
 );
 

@@ -1,17 +1,20 @@
 <?php
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/flash.php';
-requireAdmin();
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/flash.php';
+require_once __DIR__ . '/includes/activity_log.php';
+requireSuperAdmin();
 
 $message = '';
 $error = '';
+
+$superAdminRoleId = (int)$pdo->query("SELECT id FROM roles WHERE name = 'Super Admin'")->fetchColumn();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_user'])) {
         $username = trim($_POST['username']);
         $password = $_POST['password'];
-        $role = $_POST['role'];
+        $roleId = (int)$_POST['role_id'];
         $email = trim($_POST['email']);
 
         if ($username === '' || $password === '') {
@@ -23,9 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'That username already exists.';
             } else {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)');
-                $stmt->execute([$username, $hash, $role, $email]);
+                $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role_id, email) VALUES (?, ?, ?, ?)');
+                $stmt->execute([$username, $hash, $roleId, $email]);
                 setFlashMessage('User added.');
+                $roleNameStmt = $pdo->prepare('SELECT name FROM roles WHERE id = ?');
+                $roleNameStmt->execute([$roleId]);
+                logActivity('add_user', "Created user \"$username\" with role \"{$roleNameStmt->fetchColumn()}\".");
                 header('Location: users.php');
                 exit;
             }
@@ -33,14 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['update_user'])) {
         $id = (int)$_POST['user_id'];
         $username = trim($_POST['username']);
-        $role = $_POST['role'];
+        $roleId = (int)$_POST['role_id'];
         $email = trim($_POST['email']);
         $newPassword = $_POST['password'] ?? '';
 
         if ($username === '') {
             $error = 'Username is required.';
-        } elseif ($id === (int)$_SESSION['user_id'] && $role !== 'admin') {
-            $error = "You can't remove your own admin access.";
+        } elseif ($id === (int)$_SESSION['user_id'] && $roleId !== $superAdminRoleId) {
+            $error = "You can't remove your own Super Admin access.";
         } else {
             $check = $pdo->prepare('SELECT id FROM users WHERE username = ? AND id != ?');
             $check->execute([$username, $id]);
@@ -49,17 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 if ($newPassword !== '') {
                     $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role = ?, email = ?, password_hash = ? WHERE id = ?');
-                    $stmt->execute([$username, $role, $email, $hash, $id]);
+                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role_id = ?, email = ?, password_hash = ? WHERE id = ?');
+                    $stmt->execute([$username, $roleId, $email, $hash, $id]);
                 } else {
-                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role = ?, email = ? WHERE id = ?');
-                    $stmt->execute([$username, $role, $email, $id]);
-                }
-                if ($id === (int)$_SESSION['user_id']) {
-                    $_SESSION['username'] = $username;
-                    $_SESSION['role'] = $role;
+                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role_id = ?, email = ? WHERE id = ?');
+                    $stmt->execute([$username, $roleId, $email, $id]);
                 }
                 setFlashMessage('User updated.');
+                $roleNameStmt = $pdo->prepare('SELECT name FROM roles WHERE id = ?');
+                $roleNameStmt->execute([$roleId]);
+                logActivity('update_user', "Updated user \"$username\" (role: \"{$roleNameStmt->fetchColumn()}\")." . ($newPassword !== '' ? ' Password was changed.' : ''));
                 header('Location: users.php');
                 exit;
             }
@@ -69,14 +74,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id === (int)$_SESSION['user_id']) {
             $error = "You can't delete your own account while logged in.";
         } else {
+            $nameStmt = $pdo->prepare('SELECT username FROM users WHERE id = ?');
+            $nameStmt->execute([$id]);
+            $deletedUsername = $nameStmt->fetchColumn();
             $stmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
             $stmt->execute([$id]);
             setFlashMessage('User deleted.');
+            logActivity('delete_user', "Deleted user \"$deletedUsername\".");
             header('Location: users.php');
             exit;
         }
     }
 }
+
+$roles = $pdo->query('SELECT id, name FROM roles ORDER BY id')->fetchAll();
 
 $editUser = null;
 if (isset($_GET['edit'])) {
@@ -85,9 +96,9 @@ if (isset($_GET['edit'])) {
     $editUser = $editStmt->fetch();
 }
 
-$users = $pdo->query('SELECT * FROM users ORDER BY username')->fetchAll();
+$users = $pdo->query('SELECT u.*, r.name AS role_name FROM users u JOIN roles r ON r.id = u.role_id ORDER BY u.username')->fetchAll();
 $pageTitle = 'Users';
-include __DIR__ . '/../includes/layout_start.php';
+include __DIR__ . '/includes/layout_start.php';
 ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= $editUser ? 'Edit User' : 'Add User' ?></h3>
@@ -97,9 +108,10 @@ include __DIR__ . '/../includes/layout_start.php';
             <?php endif; ?>
             <input type="text" name="username" placeholder="Username" required value="<?= $editUser ? htmlspecialchars($editUser['username']) : '' ?>" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="password" name="password" placeholder="<?= $editUser ? 'New password (leave blank to keep current)' : 'Password' ?>" <?= $editUser ? '' : 'required' ?> class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <select name="role" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                <option value="user" <?= $editUser && $editUser['role'] === 'user' ? 'selected' : '' ?>>user (view due dates only)</option>
-                <option value="admin" <?= $editUser && $editUser['role'] === 'admin' ? 'selected' : '' ?>>admin (full access)</option>
+            <select name="role_id" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <?php foreach ($roles as $role): ?>
+                    <option value="<?= $role['id'] ?>" <?= $editUser && (int)$editUser['role_id'] === (int)$role['id'] ? 'selected' : '' ?>><?= htmlspecialchars($role['name']) ?></option>
+                <?php endforeach; ?>
             </select>
             <input type="email" name="email" placeholder="Email" value="<?= $editUser ? htmlspecialchars($editUser['email'] ?? '') : '' ?>" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <button type="submit" name="<?= $editUser ? 'update_user' : 'add_user' ?>" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer"><?= $editUser ? 'Save Changes' : 'Add User' ?></button>
@@ -138,7 +150,7 @@ include __DIR__ . '/../includes/layout_start.php';
             <?php foreach ($users as $u): ?>
                 <tr class="border-b border-slate-100 even:bg-slate-50 hover:bg-slate-100">
                     <td class="px-3 py-2"><?= htmlspecialchars($u['username']) ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($u['role']) ?></td>
+                    <td class="px-3 py-2"><?= htmlspecialchars($u['role_name']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($u['email']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($u['created_at']) ?></td>
                     <td class="px-3 py-2 whitespace-nowrap">
@@ -161,4 +173,4 @@ include __DIR__ . '/../includes/layout_start.php';
             </div>
         </div>
     </div>
-<?php include __DIR__ . '/../includes/layout_end.php'; ?>
+<?php include __DIR__ . '/includes/layout_end.php'; ?>
