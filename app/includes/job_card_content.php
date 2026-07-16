@@ -167,14 +167,12 @@
         <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
             <h3 class="text-lg font-semibold text-brand-dark mb-3">Attachments</h3>
             <div id="attachmentsList" class="space-y-2 mb-4"></div>
-            <?php if ($canEdit): ?>
             <form method="POST" enctype="multipart/form-data" class="flex flex-wrap gap-2 items-center mb-3">
                 <input type="hidden" name="job_card_id" id="attachmentsJobCardId">
                 <input type="file" name="attachment" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf" required class="text-sm flex-1 min-w-[180px]">
                 <button type="submit" name="upload_attachment" value="1" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Upload</button>
             </form>
             <p class="text-xs text-slate-400 mb-3">JPG, PNG, GIF, WEBP, or PDF. Max 5MB.</p>
-            <?php endif; ?>
             <div class="flex justify-end">
                 <button type="button" onclick="closeAttachmentsModal()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Close</button>
             </div>
