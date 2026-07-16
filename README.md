@@ -54,23 +54,23 @@ These are just the seeded defaults — Super Admin can rename what each role can
 ```mermaid
 flowchart LR
     subgraph Local["Local development"]
-        Dev[Developer] -->|git push main| Repo[(GitHub repo)]
+        Dev["Developer"] -->|git push main| Repo[("GitHub repo")]
     end
 
     subgraph Actions["GitHub Actions"]
-        Repo --> Workflow[deploy.yml]
+        Repo --> Workflow["deploy.yml"]
     end
 
     subgraph Host["Hostinger shared hosting"]
-        Workflow -->|FTP sync, excludes .sql/.md/.git| App[public_html/app/*.php]
-        App --> PHP[PHP runtime]
-        PHP --> DB[(MySQL database)]
-        Creds["db_credentials.php\n(account root, outside public_html)"] -.loaded by db.php.-> PHP
-        Cron[Daily cron job] --> Reminders[send_reminders.php]
+        Workflow -->|"FTP sync, excludes .sql/.md/.git"| App["public_html/app/*.php"]
+        App --> PHP["PHP runtime"]
+        PHP --> DB[("MySQL database")]
+        Creds["db_credentials.php<br/>(account root, outside public_html)"] -.->|loaded by db.php| PHP
+        Cron["Daily cron job"] --> Reminders["send_reminders.php"]
         Reminders --> DB
     end
 
-    Browser[Staff browser] -->|HTTPS login| PHP
+    Browser["Staff browser"] -->|HTTPS login| PHP
 ```
 
 Database migrations (`app/migrations/*.sql`) are deliberately excluded from the automated deploy — they're run manually once via phpMyAdmin, since they can alter live data and shouldn't fire unattended on every push.
@@ -88,16 +88,16 @@ $canEdit = hasPermission('deliveries', 'edit');  // gates POST handlers + edit U
 
 ```mermaid
 flowchart TD
-    Request[Request to a module page] --> Login{Logged in?}
-    Login -->|No| Redirect[Redirect to login.php]
-    Login -->|Yes| Who[currentUser: join users + roles]
-    Who --> Super{role = Super Admin?}
-    Super -->|Yes| Full[Full access, no lookup needed]
-    Super -->|No| Lookup[hasPermission: query role_permissions]
-    Lookup --> Level{access_level}
-    Level -->|none| Denied[403 Access Denied]
-    Level -->|view| ReadOnly[Render page, no edit controls]
-    Level -->|edit| Editable[Render page + edit controls + accept POSTs]
+    Request["Request to a module page"] --> Login{"Logged in?"}
+    Login -->|No| Redirect["Redirect to login.php"]
+    Login -->|Yes| Who["currentUser: join users + roles"]
+    Who --> Super{"role = Super Admin?"}
+    Super -->|Yes| Full["Full access, no lookup needed"]
+    Super -->|No| Lookup["hasPermission: query role_permissions"]
+    Lookup --> Level{"access_level"}
+    Level -->|none| Denied["403 Access Denied"]
+    Level -->|view| ReadOnly["Render page, no edit controls"]
+    Level -->|edit| Editable["Render page + edit controls + accept POSTs"]
     Full --> Editable
 ```
 
@@ -107,13 +107,13 @@ Permissions are read **fresh from the database on every request** — no session
 
 ```mermaid
 flowchart LR
-    PO[Purchase Order\ncustomer order] --> DS[Delivery Schedule\nsplit into due dates]
-    DS -->|Pending -> Shipped -> Delivered\nDC/Invoice captured| Locked[Locked once Delivered]
+    PO["Purchase Order<br/>customer order"] --> DS["Delivery Schedule<br/>split into due dates"]
+    DS -->|"Pending, Shipped, Delivered<br/>DC/Invoice captured"| Locked["Locked once Delivered"]
 
-    RO[Restock Order\nPending -> Purchased -> Confirmed] -->|Confirmed only| Stock[(Stock table)]
-    Stock -.reorder level.-> Dashboard[Dashboard low-stock widget]
+    RO["Restock Order<br/>Pending, Purchased, Confirmed"] -->|Confirmed only| Stock[("Stock table")]
+    Stock -.->|reorder level| Dashboard["Dashboard low-stock widget"]
 
-    JC[Job Card\nproduction run] -.independent record, not linked to PO.-> Print[Printable / PDF job card]
+    JC["Job Card<br/>production run"] -.->|"independent record, not linked to PO"| Print["Printable / PDF job card"]
 ```
 
 ## Database
