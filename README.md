@@ -4,6 +4,16 @@ An internal web app for Creative Printers (a printing company) to manage custome
 
 Plain PHP + MySQL, no framework, no build step. Deployed on shared hosting (Hostinger) via GitHub Actions.
 
+## Contents
+- [Use Cases](#use-cases)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Database](#database)
+- [Project structure](#project-structure)
+- [Local development](#local-development)
+- [Deploying](#deploying)
+- [Troubleshooting](#troubleshooting)
+
 ## Use Cases
 
 The app is used by five kinds of staff, each with a different day-to-day job. Access to every area is controlled by role — Super Admin decides who can just look at something ("View") versus who can actually change it ("Edit"), per area, per role.
@@ -16,7 +26,17 @@ The app is used by five kinds of staff, each with a different day-to-day job. Ac
 | **Sales** | Creates customer Purchase Orders, creates Job Cards for production, views Stock and Delivery Schedule to answer customer questions. |
 | **Delivery** | Owns the Delivery Schedule — updates status (Pending → Shipped → Delivered), records DC Number / Invoice Number / DC Date / Bill Date once a delivery goes out. |
 
-These are just the seeded defaults — Super Admin can rename what each role can do, or create entirely new roles, at any time from **Roles & Permissions**.
+These are just the seeded defaults — Super Admin can change what each role can do, or create entirely new roles, at any time from **Roles & Permissions**. Access to each module is one of **None / View / Edit**:
+
+| Role | Stock | Purchase Orders | Delivery Schedule | Restock Orders | Job Cards | Activity Log |
+|---|---|---|---|---|---|---|
+| Super Admin | Edit | Edit | Edit | Edit | Edit | Edit |
+| Owner | Edit | Edit | Edit | Edit | Edit | None |
+| Accountant | View | View | View | View | View | None |
+| Sales | View | Edit | View | None | Edit | None |
+| Delivery | None | View | Edit | None | None | None |
+
+(Super Admin's row is fixed/hardcoded — it's not actually stored in `role_permissions` and can't be edited. Everything else is exactly what's seeded by the RBAC migration and can be changed at any time.)
 
 ### End-to-end example: a customer order
 
@@ -172,3 +192,13 @@ Then create `db_credentials.php` three directories above `app/includes/` (or poi
 ## Deploying
 
 Push to `main` — GitHub Actions FTP-syncs everything except `.sql`, `.md`, and `.git*` files to `public_html/` on Hostinger. After a schema change, run the corresponding new file in `app/migrations/` manually via phpMyAdmin (they're written to be safe on a live database with existing data).
+
+## Troubleshooting
+
+- **"Database connection failed"** — check `db_credentials.php` at your Hostinger account root (one level above `public_html`, outside git entirely). Database name/username/password must match exactly what hPanel shows.
+- **Blank white page** — check hPanel's **Error Logs** (under Advanced); PHP errors are logged there, not shown on screen.
+- **"Access denied. You do not have permission to access this page."** — the logged-in user's role has **None** on that module. Ask a Super Admin to grant at least View from **Roles & Permissions**; it takes effect on their next page load, no re-login needed.
+- **"Access denied. Super Admin login required."** — only appears on `users.php` and `roles.php`, which are hardcoded Super-Admin-only and never configurable.
+- **New page doesn't show up in Roles & Permissions** — the module key wasn't added to the `$modules` array in `app/roles.php`. See the comment at the top of that file for the exact steps.
+- **Cron reminders not sending** — visit `send_reminders.php`'s URL manually once to confirm it runs without error, then double-check the cron job's file path is exact (hPanel shows the correct path when you click into the folder in File Manager).
+- **Old bookmarked URL like `admin/deliveries.php` 404s** — expected. The `admin/`/`user/` folder split was removed; every page now lives directly under `app/` (e.g. `app/deliveries.php`).
