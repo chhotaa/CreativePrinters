@@ -38,6 +38,10 @@ $heading = $pageHeading ?? ($pageTitle ?? '');
         <aside class="w-60 shrink-0 bg-brand-dark text-white flex flex-col">
             <div class="px-5 py-5 border-b border-white/10">
                 <span class="font-bold text-lg">Creative Printers</span>
+                <div class="mt-2 text-xs text-white/60">
+                    Logged in as <span class="font-semibold text-white"><?= htmlspecialchars(currentUser()['username'] ?? '') ?></span>
+                    <span class="text-white/40">(<?= htmlspecialchars(currentUser()['role_name'] ?? '') ?>)</span>
+                </div>
                 <a href="logout.php" class="mt-3 flex items-center gap-1 text-xs font-semibold text-white/70 hover:text-white transition-colors">&larr; Log Out</a>
             </div>
             <nav class="flex-1 py-3">

@@ -78,6 +78,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Could not save permissions. Please try again.';
             }
         }
+    } elseif (isset($_POST['delete_role'])) {
+        $roleId = (int)$_POST['role_id'];
+        $roleCheck = $pdo->prepare('SELECT name FROM roles WHERE id = ? AND is_system = 0');
+        $roleCheck->execute([$roleId]);
+        $roleName = $roleCheck->fetchColumn();
+        if ($roleName === false) {
+            $error = 'That role could not be found.';
+        } else {
+            $userCountStmt = $pdo->prepare('SELECT COUNT(*) FROM users WHERE role_id = ?');
+            $userCountStmt->execute([$roleId]);
+            $userCount = (int)$userCountStmt->fetchColumn();
+            if ($userCount > 0) {
+                $error = "Cannot delete \"$roleName\" — $userCount user" . ($userCount === 1 ? ' is' : 's are') . ' still assigned to it. Reassign them to a different role first.';
+            } else {
+                $stmt = $pdo->prepare('DELETE FROM roles WHERE id = ?');
+                $stmt->execute([$roleId]);
+                setFlashMessage("Role \"$roleName\" deleted.");
+                logActivity('delete_role', "Deleted role \"$roleName\".");
+                header('Location: roles.php');
+                exit;
+            }
+        }
     }
 }
 
@@ -116,7 +138,12 @@ include __DIR__ . '/includes/layout_start.php';
                 <tr class="bg-brand-dark text-white">
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Module</th>
                     <?php foreach ($roles as $i => $role): ?>
-                        <th class="text-left px-3 py-2 font-semibold <?= $i === count($roles) - 1 ? 'rounded-tr-md' : '' ?>"><?= htmlspecialchars($role['name']) ?></th>
+                        <th class="text-left px-3 py-2 font-semibold <?= $i === count($roles) - 1 ? 'rounded-tr-md' : '' ?>">
+                            <span class="inline-flex items-center gap-1.5">
+                                <?= htmlspecialchars($role['name']) ?>
+                                <button type="submit" name="delete_role" value="1" form="role-form-<?= $role['id'] ?>" onclick="return confirm('Delete role &quot;<?= htmlspecialchars(addslashes($role['name'])) ?>&quot;? This cannot be undone.');" title="Delete role" class="text-white/50 hover:text-red-300 transition-colors cursor-pointer leading-none">&times;</button>
+                            </span>
+                        </th>
                     <?php endforeach; ?>
                 </tr>
             </thead>

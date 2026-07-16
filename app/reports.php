@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/xlsx_writer.php';
 requirePermission('reports', 'view');
 
 $today = date('Y-m-d');
@@ -8,54 +9,38 @@ $defaultFrom = date('Y-m-d', strtotime('-30 days'));
 $from = $_GET['from'] ?? $defaultFrom;
 $to = $_GET['to'] ?? $today;
 
-if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
     $report = $_GET['report'] ?? '';
-    header('Content-Type: text/csv');
 
     if ($report === 'sales') {
-        header('Content-Disposition: attachment; filename="sales_by_customer.csv"');
         $rows = $pdo->prepare(
             "SELECT customer_name, COUNT(DISTINCT po_number) AS po_count, SUM(total_quantity) AS total_qty
              FROM purchase_orders WHERE po_date BETWEEN ? AND ?
              GROUP BY customer_name ORDER BY total_qty DESC"
         );
         $rows->execute([$from, $to]);
-        $out = fopen('php://output', 'w');
-        fputcsv($out, ['Customer', 'PO Count', 'Total Quantity'], ',', '"', '');
-        foreach ($rows->fetchAll() as $r) {
-            fputcsv($out, [$r['customer_name'], $r['po_count'], $r['total_qty']], ',', '"', '');
-        }
-        fclose($out);
+        $data = array_map(fn($r) => [$r['customer_name'], (int)$r['po_count'], (int)$r['total_qty']], $rows->fetchAll());
+        outputXlsx('sales_by_customer.xlsx', ['Customer', 'PO Count', 'Total Quantity'], $data);
         exit;
     } elseif ($report === 'production') {
-        header('Content-Disposition: attachment; filename="production_volume.csv"');
         $rows = $pdo->prepare(
             "SELECT order_type, COUNT(*) AS card_count
              FROM job_cards WHERE job_date BETWEEN ? AND ?
              GROUP BY order_type ORDER BY card_count DESC"
         );
         $rows->execute([$from, $to]);
-        $out = fopen('php://output', 'w');
-        fputcsv($out, ['Order Type', 'Job Card Count'], ',', '"', '');
-        foreach ($rows->fetchAll() as $r) {
-            fputcsv($out, [$r['order_type'], $r['card_count']], ',', '"', '');
-        }
-        fclose($out);
+        $data = array_map(fn($r) => [$r['order_type'], (int)$r['card_count']], $rows->fetchAll());
+        outputXlsx('production_volume.xlsx', ['Order Type', 'Job Card Count'], $data);
         exit;
     } elseif ($report === 'restock') {
-        header('Content-Disposition: attachment; filename="restock_activity_by_supplier.csv"');
         $rows = $pdo->prepare(
             "SELECT supplier_name, COUNT(*) AS order_count, SUM(received_quantity) AS total_received
              FROM restock_orders WHERE status = 'Confirmed' AND created_at BETWEEN ? AND ?
              GROUP BY supplier_name ORDER BY total_received DESC"
         );
         $rows->execute([$from, $to . ' 23:59:59']);
-        $out = fopen('php://output', 'w');
-        fputcsv($out, ['Supplier', 'Confirmed Orders', 'Total Quantity Received'], ',', '"', '');
-        foreach ($rows->fetchAll() as $r) {
-            fputcsv($out, [$r['supplier_name'], $r['order_count'], $r['total_received']], ',', '"', '');
-        }
-        fclose($out);
+        $data = array_map(fn($r) => [$r['supplier_name'], (int)$r['order_count'], (int)$r['total_received']], $rows->fetchAll());
+        outputXlsx('restock_activity_by_supplier.xlsx', ['Supplier', 'Confirmed Orders', 'Total Quantity Received'], $data);
         exit;
     }
     http_response_code(400);
@@ -100,7 +85,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-brand-dark">Sales by Customer</h3>
-            <a href="?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>&export=csv&report=sales" class="text-sm font-semibold text-brand-green hover:text-brand-greendark">Export CSV</a>
+            <a href="?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>&export=xlsx&report=sales" class="text-sm font-semibold text-brand-green hover:text-brand-greendark">Export Excel</a>
         </div>
         <div class="overflow-x-auto">
         <table class="w-full text-sm border-collapse">
@@ -130,7 +115,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-brand-dark">Production Volume</h3>
-            <a href="?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>&export=csv&report=production" class="text-sm font-semibold text-brand-green hover:text-brand-greendark">Export CSV</a>
+            <a href="?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>&export=xlsx&report=production" class="text-sm font-semibold text-brand-green hover:text-brand-greendark">Export Excel</a>
         </div>
         <div class="overflow-x-auto">
         <table class="w-full text-sm border-collapse">
@@ -158,7 +143,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-lg font-semibold text-brand-dark">Restock Activity by Supplier</h3>
-            <a href="?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>&export=csv&report=restock" class="text-sm font-semibold text-brand-green hover:text-brand-greendark">Export CSV</a>
+            <a href="?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>&export=xlsx&report=restock" class="text-sm font-semibold text-brand-green hover:text-brand-greendark">Export Excel</a>
         </div>
         <p class="text-xs text-slate-400 mb-3">Shows confirmed restock order counts and quantities — not a dollar figure, since unit cost isn't tracked yet.</p>
         <div class="overflow-x-auto">
