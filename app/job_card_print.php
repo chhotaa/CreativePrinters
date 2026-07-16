@@ -14,7 +14,7 @@ if (!$jobCard) {
 }
 
 function jcCheck($checked) {
-    return $checked ? '&#10003;' : '';
+    return $checked ? '<span class="tick">&#10003;</span>' : '';
 }
 ?>
 <!DOCTYPE html>
@@ -34,25 +34,21 @@ function jcCheck($checked) {
     }
     @page { size: 170mm 185mm; margin: 0.3in; }
     body { font-family: 'Cervino Semi Bold Neue', Arial, sans-serif; font-size: 12pt; margin: 0; padding: 20px; background: #f0f0f0; color: #1a1a1a; }
-    .sheet { max-width: 170mm; margin: 0 auto; background: #fff; border: 2px solid #1a1a1a; border-radius: 10px; padding: 12px; }
+    .sheet { max-width: 170mm; margin: 0 auto; background: #fff; border: 2px solid #1a1a1a; border-radius: 10px; padding: 10px; overflow: hidden; }
     .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
     .company-logo { max-width: 200px; height: auto; }
     .meta { text-align: right; }
-    .meta div { margin-bottom: 4px; }
+    .meta div { margin-bottom: 3px; }
     .meta .dotted { display: inline-block; min-width: 100px; border-bottom: 1px dotted #999; padding-bottom: 2px; }
-    .divider { border: none; border-top: 2px solid #1a1a1a; margin: 6px 0; }
-    .title-pill { background: #1a1a1a; color: #fff; text-align: center; padding: 5px; letter-spacing: 1px; border-radius: 4px; margin-bottom: 6px; }
-    .body-grid { display: flex; gap: 24px; flex-wrap: wrap; }
-    .fields { flex: 1.6; min-width: 280px; }
-    .field-row { display: flex; margin-bottom: 6px; }
+    .title-pill { background: #1a1a1a; color: #fff; text-align: center; padding: 5px; letter-spacing: 1px; margin: 6px -10px; }
+    .field-row { display: flex; margin-bottom: 5px; }
     .field-label { width: 150px; flex-shrink: 0; color: #333; }
-    .field-value { flex: 1; border-bottom: 1px dotted #999; padding-bottom: 2px; }
-    .options { flex: 1; min-width: 220px; }
-    .option-group-label { background: #1a1a1a; color: #fff; display: inline-block; padding: 2px 10px; border-radius: 3px; margin-bottom: 3px; margin-top: 4px; }
-    .option-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-    .option-box { width: 56px; height: 20px; border: 1px solid #333; border-radius: 3px; text-align: center; }
-    .footer-title { background: #1a1a1a; color: #fff; text-align: center; padding: 5px; letter-spacing: 1px; border-radius: 4px; margin-top: 6px; }
-    .details-box { min-height: 40px; padding: 4px; line-height: 1.3; white-space: pre-wrap; }
+    .field-value { flex: 1; border-bottom: 1px dotted #999; padding-bottom: 1px; white-space: pre-wrap; line-height: 1.25; }
+    .checkbox-section { margin-top: 4px; }
+    .checkbox-row { display: grid; grid-template-columns: 140px 105px 24px 95px 24px 60px 24px; align-items: center; column-gap: 6px; margin-bottom: 4px; }
+    .pill-label { background: #1a1a1a; color: #fff; padding: 4px 0 4px 12px; margin-left: -10px; border-radius: 0 999px 999px 0; }
+    .checkbox-box { width: 20px; height: 18px; border: 2px solid #1a1a1a; border-radius: 5px; position: relative; }
+    .checkbox-box .tick { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 30px; font-weight: normal; line-height: 1; white-space: nowrap; }
     .print-bar { max-width: 170mm; margin: 0 auto 15px; text-align: right; }
     .print-btn { background: #9acd32; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; margin-left: 8px; }
     .print-btn:hover { background: #7fae22; }
@@ -80,41 +76,45 @@ function jcCheck($checked) {
                 <div>Date : <span class="dotted"><?= htmlspecialchars(date('d.m.Y', strtotime($jobCard['job_date']))) ?></span></div>
             </div>
         </div>
-        <hr class="divider">
         <div class="title-pill">JOB CARD</div>
-        <div class="body-grid">
-            <div class="fields">
-                <div class="field-row"><div class="field-label">Name</div><div class="field-value">: <?= htmlspecialchars($jobCard['product_name']) ?></div></div>
-                <div class="field-row"><div class="field-label">Design Name</div><div class="field-value">: <?= htmlspecialchars($jobCard['design_name'] ?? '') ?></div></div>
-                <div class="field-row"><div class="field-label">Board Name/ GSM</div><div class="field-value">: <?= htmlspecialchars($jobCard['board_name_gsm'] ?? '') ?></div></div>
-                <div class="field-row"><div class="field-label">Board Size</div><div class="field-value">: <?= htmlspecialchars($jobCard['board_size'] ?? '') ?></div></div>
-                <div class="field-row"><div class="field-label">Cutting Size</div><div class="field-value">: <?= htmlspecialchars($jobCard['cutting_size'] ?? '') ?></div></div>
-                <div class="field-row"><div class="field-label">Board Quantity</div><div class="field-value">: <?= htmlspecialchars($jobCard['board_quantity'] ?? '') ?></div></div>
-                <div class="field-row"><div class="field-label">Copies</div><div class="field-value">: <?= htmlspecialchars($jobCard['copies'] ?? '') ?></div></div>
-                <div class="field-row"><div class="field-label">Colour</div><div class="field-value">: <?= htmlspecialchars($jobCard['colour'] ?? '') ?></div></div>
-                <div class="field-row"><div class="field-label">Lamination / Varnish</div><div class="field-value">: <?= htmlspecialchars($jobCard['lamination_varnish'] ?? '') ?></div></div>
+        <div class="fields">
+            <div class="field-row"><div class="field-label">Name</div><div class="field-value">: <?= htmlspecialchars($jobCard['product_name']) ?></div></div>
+            <div class="field-row"><div class="field-label">Design Name</div><div class="field-value">: <?= htmlspecialchars($jobCard['design_name'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Board Name / Gsm</div><div class="field-value">: <?= htmlspecialchars($jobCard['board_name_gsm'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Board Size</div><div class="field-value">: <?= htmlspecialchars($jobCard['board_size'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Cutting Size</div><div class="field-value">: <?= htmlspecialchars($jobCard['cutting_size'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Board Quantity</div><div class="field-value">: <?= htmlspecialchars($jobCard['board_quantity'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Copies</div><div class="field-value">: <?= htmlspecialchars($jobCard['copies'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Colour</div><div class="field-value">: <?= htmlspecialchars($jobCard['colour'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Lamination / Varnish</div><div class="field-value">: <?= htmlspecialchars($jobCard['lamination_varnish'] ?? '') ?></div></div>
+            <div class="field-row"><div class="field-label">Details</div><div class="field-value"><?= $jobCard['details'] !== null && $jobCard['details'] !== '' ? htmlspecialchars($jobCard['details']) : '' ?></div></div>
+        </div>
+        <div class="checkbox-section">
+            <div class="checkbox-row">
+                <span class="pill-label">Order</span>
+                <span>Bulk Production</span><span class="checkbox-box"><?= jcCheck($jobCard['order_type'] === 'Bulk Production') ?></span>
+                <span>Repeat order</span><span class="checkbox-box"><?= jcCheck($jobCard['order_type'] === 'Repeat Order') ?></span>
+                <span>Sample</span><span class="checkbox-box"><?= jcCheck($jobCard['order_type'] === 'Sample') ?></span>
             </div>
-            <div class="options">
-                <div class="option-group-label" style="margin-top:0;">Order</div>
-                <div class="option-row"><span>Sample</span><span class="option-box"><?= jcCheck($jobCard['order_type'] === 'Sample') ?></span></div>
-                <div class="option-row"><span>Bulk Production</span><span class="option-box"><?= jcCheck($jobCard['order_type'] === 'Bulk Production') ?></span></div>
-                <div class="option-row"><span>Repeat order</span><span class="option-box"><?= jcCheck($jobCard['order_type'] === 'Repeat Order') ?></span></div>
-
-                <div class="option-group-label">Plate</div>
-                <div class="option-row"><span>New</span><span class="option-box"><?= jcCheck($jobCard['plate_type'] === 'New') ?></span></div>
-                <div class="option-row"><span>Old</span><span class="option-box"><?= jcCheck($jobCard['plate_type'] === 'Old') ?></span></div>
-
-                <div class="option-group-label">Die Punching</div>
-                <div class="option-row"><span>New</span><span class="option-box"><?= jcCheck($jobCard['die_punching'] === 'New') ?></span></div>
-                <div class="option-row"><span>Old</span><span class="option-box"><?= jcCheck($jobCard['die_punching'] === 'Old') ?></span></div>
-
-                <div class="option-group-label">Pasting</div>
-                <div class="option-row"><span>Perforation</span><span class="option-box"><?= jcCheck((bool)$jobCard['pasting_perforation']) ?></span></div>
-                <div class="option-row"><span>Double Board</span><span class="option-box"><?= jcCheck((bool)$jobCard['pasting_double_board']) ?></span></div>
+            <div class="checkbox-row">
+                <span class="pill-label">Plate</span>
+                <span>New</span><span class="checkbox-box"><?= jcCheck($jobCard['plate_type'] === 'New') ?></span>
+                <span>Old</span><span class="checkbox-box"><?= jcCheck($jobCard['plate_type'] === 'Old') ?></span>
+                <span></span><span></span>
+            </div>
+            <div class="checkbox-row">
+                <span class="pill-label">Die Punching</span>
+                <span>New</span><span class="checkbox-box"><?= jcCheck($jobCard['die_punching'] === 'New') ?></span>
+                <span>Old</span><span class="checkbox-box"><?= jcCheck($jobCard['die_punching'] === 'Old') ?></span>
+                <span></span><span></span>
+            </div>
+            <div class="checkbox-row">
+                <span class="pill-label">Pasting</span>
+                <span>Perforation</span><span class="checkbox-box"><?= jcCheck((bool)$jobCard['pasting_perforation']) ?></span>
+                <span>Double Board</span><span class="checkbox-box"><?= jcCheck((bool)$jobCard['pasting_double_board']) ?></span>
+                <span></span><span></span>
             </div>
         </div>
-        <div class="footer-title">DETAILS</div>
-        <div class="details-box"><?= $jobCard['details'] !== null && $jobCard['details'] !== '' ? htmlspecialchars($jobCard['details']) : '&nbsp;' ?></div>
     </div>
     <script>
         function downloadPdf() {
