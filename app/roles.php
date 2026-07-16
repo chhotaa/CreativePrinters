@@ -20,6 +20,9 @@ $modules = [
     'deliveries' => 'Delivery Schedule',
     'restock_orders' => 'Restock Orders',
     'job_cards' => 'Job Cards',
+    'customers' => 'Customers',
+    'suppliers' => 'Suppliers',
+    'reports' => 'Reports',
     'activity_log' => 'Activity Log',
 ];
 $accessLevels = ['none' => 'None', 'view' => 'View', 'edit' => 'Edit'];

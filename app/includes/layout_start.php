@@ -14,6 +14,9 @@ if (hasPermission('purchase_orders', 'view')) $navItems['purchase_orders.php'] =
 if (hasPermission('deliveries', 'view')) $navItems['deliveries.php'] = 'Delivery Schedule';
 if (hasPermission('restock_orders', 'view')) $navItems['restock_orders.php'] = 'Restock Orders';
 if (hasPermission('job_cards', 'view')) $navItems['job_cards.php'] = 'Job Cards';
+if (hasPermission('customers', 'view')) $navItems['customers.php'] = 'Customers';
+if (hasPermission('suppliers', 'view')) $navItems['suppliers.php'] = 'Suppliers';
+if (hasPermission('reports', 'view')) $navItems['reports.php'] = 'Reports';
 if (hasPermission('activity_log', 'view')) $navItems['activity_log.php'] = 'Activity Log';
 if (currentUser()['role_name'] === 'Super Admin') {
     $navItems['users.php'] = 'Users';

@@ -89,6 +89,7 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])
     }
 }
 
+$existingCustomers = $pdo->query('SELECT name FROM customers ORDER BY name')->fetchAll();
 $pos = $pdo->query('SELECT * FROM purchase_orders ORDER BY po_date DESC, id DESC')->fetchAll();
 $pageTitle = 'Purchase Orders';
 include __DIR__ . '/includes/layout_start.php';
@@ -101,7 +102,12 @@ include __DIR__ . '/includes/layout_start.php';
             <div class="flex flex-wrap gap-2 items-center mb-4">
                 <input type="text" name="po_number" placeholder="PO Number (e.g. HT64023370)" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
                 <input type="date" name="po_date" title="PO Date" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                <input type="text" name="customer_name" placeholder="Customer name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <input type="text" name="customer_name" list="po-customer-names" placeholder="Customer name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <datalist id="po-customer-names">
+                    <?php foreach ($existingCustomers as $c): ?>
+                        <option value="<?= htmlspecialchars($c['name']) ?>"></option>
+                    <?php endforeach; ?>
+                </datalist>
             </div>
 
             <div class="text-xs font-semibold text-slate-500 mb-2">Items</div>

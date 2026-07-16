@@ -3,6 +3,7 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/flash.php';
 require_once __DIR__ . '/includes/activity_log.php';
+require_once __DIR__ . '/includes/attachments.php';
 requirePermission('deliveries', 'view');
 $canEdit = hasPermission('deliveries', 'edit');
 
@@ -89,6 +90,25 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
         logActivity('delete_delivery', "Deleted delivery #$id for PO $poNumber.");
         header('Location: deliveries.php');
         exit;
+    } elseif (isset($_POST['upload_attachment'])) {
+        $id = (int)$_POST['delivery_id'];
+        $uploadError = saveAttachment('delivery', $id, $_FILES['attachment'] ?? []);
+        if ($uploadError) {
+            $error = $uploadError;
+        } else {
+            setFlashMessage('Attachment uploaded.');
+            logActivity('upload_attachment', "Uploaded attachment \"{$_FILES['attachment']['name']}\" to delivery #$id.");
+            header('Location: deliveries.php');
+            exit;
+        }
+    } elseif (isset($_POST['delete_attachment'])) {
+        $attachmentId = (int)$_POST['attachment_id'];
+        if (deleteAttachment($attachmentId)) {
+            setFlashMessage('Attachment deleted.');
+            logActivity('delete_attachment', "Deleted attachment #$attachmentId from a delivery.");
+        }
+        header('Location: deliveries.php');
+        exit;
     }
 }
 
@@ -108,6 +128,13 @@ $deliveries = $pdo->query(
      JOIN purchase_orders po ON po.id = d.po_id
      ORDER BY d.due_date ASC"
 )->fetchAll();
+
+$deliveryAttachments = [];
+$allAttachments = $pdo->query("SELECT * FROM attachments WHERE record_type = 'delivery' ORDER BY uploaded_at DESC")->fetchAll();
+foreach ($allAttachments as $a) {
+    $deliveryAttachments[$a['record_id']][] = $a;
+}
+
 $pageTitle = 'Delivery Schedule';
 include __DIR__ . '/includes/layout_start.php';
 ?>
@@ -255,6 +282,12 @@ include __DIR__ . '/includes/layout_start.php';
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10 3.5c-4.14 0-7.5 3.5-8.5 6.5 1 3 4.36 6.5 8.5 6.5s7.5-3.5 8.5-6.5c-1-3-4.36-6.5-8.5-6.5zm0 11a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/><circle cx="10" cy="10" r="2"/></svg>
                             </button>
                         <?php endif; ?>
+                        <button type="button" onclick="openAttachmentsModal(<?= $d['id'] ?>)" title="Attachments" class="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer align-middle relative">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M8.5 3a3.5 3.5 0 00-3.5 3.5v6a2.5 2.5 0 005 0v-5a1 1 0 10-2 0v5a.5.5 0 01-1 0v-6a1.5 1.5 0 013 0v6.5a3 3 0 006 0v-7a.75.75 0 00-1.5 0v7a1.5 1.5 0 01-3 0v-6.5A3.5 3.5 0 008.5 3z"/></svg>
+                            <?php if (!empty($deliveryAttachments[$d['id']])): ?>
+                                <span class="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-brand-green text-white text-[9px] leading-3.5 flex items-center justify-center"><?= count($deliveryAttachments[$d['id']]) ?></span>
+                            <?php endif; ?>
+                        </button>
                         <?php if ($canEdit): ?>
                         <form method="POST" onsubmit="return confirm('Delete this delivery date?');" style="display:inline-block; margin:0;">
                             <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
@@ -327,7 +360,55 @@ include __DIR__ . '/includes/layout_start.php';
         </div>
     </div>
 
+    <div id="attachmentsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
+            <h3 class="text-lg font-semibold text-brand-dark mb-3">Attachments</h3>
+            <div id="attachmentsList" class="space-y-2 mb-4"></div>
+            <?php if ($canEdit): ?>
+            <form method="POST" enctype="multipart/form-data" class="flex flex-wrap gap-2 items-center mb-3">
+                <input type="hidden" name="delivery_id" id="attachmentsDeliveryId">
+                <input type="file" name="attachment" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf" required class="text-sm flex-1 min-w-[180px]">
+                <button type="submit" name="upload_attachment" value="1" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Upload</button>
+            </form>
+            <p class="text-xs text-slate-400 mb-3">JPG, PNG, GIF, WEBP, or PDF. Max 5MB.</p>
+            <?php endif; ?>
+            <div class="flex justify-end">
+                <button type="button" onclick="closeAttachmentsModal()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        var deliveryAttachmentsData = <?= json_encode(array_map(function ($list) {
+            return array_map(function ($a) {
+                return ['id' => $a['id'], 'name' => $a['original_filename']];
+            }, $list);
+        }, $deliveryAttachments), JSON_UNESCAPED_SLASHES) ?>;
+        var attachmentsCanEdit = <?= $canEdit ? 'true' : 'false' ?>;
+
+        function openAttachmentsModal(deliveryId) {
+            document.getElementById('attachmentsDeliveryId').value = deliveryId;
+            var list = document.getElementById('attachmentsList');
+            var items = deliveryAttachmentsData[deliveryId] || [];
+            if (items.length === 0) {
+                list.innerHTML = '<p class="text-sm text-slate-400">No attachments yet.</p>';
+            } else {
+                list.innerHTML = items.map(function (a) {
+                    var deleteBtn = attachmentsCanEdit
+                        ? '<form method="POST" onsubmit="return confirm(\'Delete this attachment?\');" style="display:inline;margin:0;"><input type="hidden" name="attachment_id" value="' + a.id + '"><input type="hidden" name="delivery_id" value="' + deliveryId + '"><button type="submit" name="delete_attachment" value="1" class="text-red-600 text-xs font-semibold hover:text-red-700 cursor-pointer">Delete</button></form>'
+                        : '';
+                    return '<div class="flex items-center justify-between gap-2 border border-slate-200 rounded-md px-3 py-2 text-sm">' +
+                        '<a href="download_attachment.php?id=' + a.id + '" target="_blank" class="text-brand-dark hover:text-brand-green truncate">' + a.name.replace(/</g, '&lt;') + '</a>' +
+                        deleteBtn + '</div>';
+                }).join('');
+            }
+            document.getElementById('attachmentsModal').classList.remove('hidden');
+        }
+
+        function closeAttachmentsModal() {
+            document.getElementById('attachmentsModal').classList.add('hidden');
+        }
+
         var deliveryDetailsData = <?= json_encode(array_reduce($deliveries, function ($carry, $d) {
             if ($d['status'] === 'Delivered' && $d['dc_number']) {
                 $carry[$d['id']] = [

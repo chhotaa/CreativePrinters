@@ -121,6 +121,7 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $existingProducts = $canEdit ? $pdo->query('SELECT DISTINCT product_name FROM stock ORDER BY product_name')->fetchAll() : [];
+$existingSuppliers = $canEdit ? $pdo->query('SELECT name FROM suppliers ORDER BY name')->fetchAll() : [];
 $restockOrders = $pdo->query('SELECT * FROM restock_orders ORDER BY created_at DESC')->fetchAll();
 $pageTitle = 'Restock Orders';
 include __DIR__ . '/includes/layout_start.php';
@@ -137,7 +138,12 @@ include __DIR__ . '/includes/layout_start.php';
                 <?php endforeach; ?>
             </datalist>
             <input type="number" name="quantity" placeholder="Quantity to order" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-44">
-            <input type="text" name="supplier_name" placeholder="Supplier name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <input type="text" name="supplier_name" list="restock-supplier-names" placeholder="Supplier name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <datalist id="restock-supplier-names">
+                <?php foreach ($existingSuppliers as $s): ?>
+                    <option value="<?= htmlspecialchars($s['name']) ?>"></option>
+                <?php endforeach; ?>
+            </datalist>
             <input type="text" name="notes" placeholder="Notes (optional)" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <button type="submit" name="create_restock" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Create Restock Order</button>
         </form>

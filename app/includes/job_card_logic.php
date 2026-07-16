@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/flash.php';
 require_once __DIR__ . '/activity_log.php';
+require_once __DIR__ . '/attachments.php';
 $message = $message ?? '';
 $error = $error ?? '';
 $canEdit = hasPermission('job_cards', 'edit');
@@ -122,6 +123,25 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: job_cards.php');
             exit;
         }
+    } elseif (isset($_POST['upload_attachment'])) {
+        $id = (int)$_POST['job_card_id'];
+        $uploadError = saveAttachment('job_card', $id, $_FILES['attachment'] ?? []);
+        if ($uploadError) {
+            $error = $uploadError;
+        } else {
+            setFlashMessage('Attachment uploaded.');
+            logActivity('upload_attachment', "Uploaded attachment \"{$_FILES['attachment']['name']}\" to Job Card #$id.");
+            header('Location: job_cards.php');
+            exit;
+        }
+    } elseif (isset($_POST['delete_attachment'])) {
+        $attachmentId = (int)$_POST['attachment_id'];
+        if (deleteAttachment($attachmentId)) {
+            setFlashMessage('Attachment deleted.');
+            logActivity('delete_attachment', "Deleted attachment #$attachmentId from a Job Card.");
+        }
+        header('Location: job_cards.php');
+        exit;
     }
 }
 
@@ -133,3 +153,9 @@ if ($canEdit && isset($_GET['edit'])) {
 }
 
 $jobCards = $pdo->query('SELECT * FROM job_cards ORDER BY id DESC')->fetchAll();
+
+$jobCardAttachments = [];
+$allJobCardAttachments = $pdo->query("SELECT * FROM attachments WHERE record_type = 'job_card' ORDER BY uploaded_at DESC")->fetchAll();
+foreach ($allJobCardAttachments as $a) {
+    $jobCardAttachments[$a['record_id']][] = $a;
+}
