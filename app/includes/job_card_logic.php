@@ -123,23 +123,28 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: job_cards.php');
             exit;
         }
-    } elseif (isset($_POST['upload_attachment'])) {
-        $id = (int)$_POST['job_card_id'];
-        $uploadError = saveAttachment('job_card', $id, $_FILES['attachment'] ?? []);
-        if ($uploadError) {
-            $error = $uploadError;
-        } else {
-            setFlashMessage('Attachment uploaded.');
-            logActivity('upload_attachment', "Uploaded attachment \"{$_FILES['attachment']['name']}\" to Job Card #$id.");
-            header('Location: job_cards.php');
-            exit;
-        }
     } elseif (isset($_POST['delete_attachment'])) {
         $attachmentId = (int)$_POST['attachment_id'];
         if (deleteAttachment($attachmentId)) {
             setFlashMessage('Attachment deleted.');
             logActivity('delete_attachment', "Deleted attachment #$attachmentId from a Job Card.");
         }
+        header('Location: job_cards.php');
+        exit;
+    }
+}
+
+// Uploading an attachment only needs View permission on job_cards — View
+// users can attach reference files even though they can't create/edit/delete
+// the job card itself.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_attachment'])) {
+    $id = (int)$_POST['job_card_id'];
+    $uploadError = saveAttachment('job_card', $id, $_FILES['attachment'] ?? []);
+    if ($uploadError) {
+        $error = $uploadError;
+    } else {
+        setFlashMessage('Attachment uploaded.');
+        logActivity('upload_attachment', "Uploaded attachment \"{$_FILES['attachment']['name']}\" to Job Card #$id.");
         header('Location: job_cards.php');
         exit;
     }
