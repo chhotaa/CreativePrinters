@@ -16,6 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'];
         $roleId = (int)$_POST['role_id'];
         $email = trim($_POST['email']);
+        $phone = trim($_POST['phone'] ?? '');
 
         if ($username === '' || $password === '') {
             $error = 'Username and password are required.';
@@ -26,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'That username already exists.';
             } else {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role_id, email) VALUES (?, ?, ?, ?)');
-                $stmt->execute([$username, $hash, $roleId, $email]);
+                $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role_id, email, phone) VALUES (?, ?, ?, ?, ?)');
+                $stmt->execute([$username, $hash, $roleId, $email, $phone ?: null]);
                 setFlashMessage('User added.');
                 $roleNameStmt = $pdo->prepare('SELECT name FROM roles WHERE id = ?');
                 $roleNameStmt->execute([$roleId]);
@@ -41,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $username = trim($_POST['username']);
         $roleId = (int)$_POST['role_id'];
         $email = trim($_POST['email']);
+        $phone = trim($_POST['phone'] ?? '');
         $newPassword = $_POST['password'] ?? '';
 
         if ($username === '') {
@@ -55,11 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 if ($newPassword !== '') {
                     $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role_id = ?, email = ?, password_hash = ? WHERE id = ?');
-                    $stmt->execute([$username, $roleId, $email, $hash, $id]);
+                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role_id = ?, email = ?, phone = ?, password_hash = ? WHERE id = ?');
+                    $stmt->execute([$username, $roleId, $email, $phone ?: null, $hash, $id]);
                 } else {
-                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role_id = ?, email = ? WHERE id = ?');
-                    $stmt->execute([$username, $roleId, $email, $id]);
+                    $stmt = $pdo->prepare('UPDATE users SET username = ?, role_id = ?, email = ?, phone = ? WHERE id = ?');
+                    $stmt->execute([$username, $roleId, $email, $phone ?: null, $id]);
                 }
                 setFlashMessage('User updated.');
                 $roleNameStmt = $pdo->prepare('SELECT name FROM roles WHERE id = ?');
@@ -114,6 +116,7 @@ include __DIR__ . '/includes/layout_start.php';
                 <?php endforeach; ?>
             </select>
             <input type="email" name="email" placeholder="Email" value="<?= $editUser ? htmlspecialchars($editUser['email'] ?? '') : '' ?>" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <input type="text" name="phone" placeholder="Phone (for SMS/WhatsApp reminders)" value="<?= $editUser ? htmlspecialchars($editUser['phone'] ?? '') : '' ?>" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <button type="submit" name="<?= $editUser ? 'update_user' : 'add_user' ?>" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer"><?= $editUser ? 'Save Changes' : 'Add User' ?></button>
             <?php if ($editUser): ?>
                 <a href="users.php" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</a>
@@ -142,6 +145,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Username</th>
                     <th class="text-left px-3 py-2 font-semibold">Role</th>
                     <th class="text-left px-3 py-2 font-semibold">Email</th>
+                    <th class="text-left px-3 py-2 font-semibold">Phone</th>
                     <th class="text-left px-3 py-2 font-semibold">Created</th>
                     <th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th>
                 </tr>
@@ -152,6 +156,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <td class="px-3 py-2"><?= htmlspecialchars($u['username']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($u['role_name']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($u['email']) ?></td>
+                    <td class="px-3 py-2"><?= htmlspecialchars($u['phone'] ?? '') ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($u['created_at']) ?></td>
                     <td class="px-3 py-2 whitespace-nowrap">
                         <a href="?edit=<?= $u['id'] ?>" class="px-3 py-1.5 rounded-md bg-brand-dark text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Edit</a>

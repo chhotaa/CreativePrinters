@@ -5,6 +5,7 @@
 // See SETUP_GUIDE_PHP.md for how to schedule it.
 // ============================================================
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/sms.php';
 
 $REMINDER_DAYS_BEFORE = 3; // change this to send reminders earlier/later
 
@@ -17,13 +18,16 @@ $stmt = $pdo->query(
 );
 $rows = $stmt->fetchAll();
 
-$adminEmails = array_column(
-    $pdo->query(
-        "SELECT u.email FROM users u JOIN roles r ON r.id = u.role_id
-         WHERE r.name = 'Super Admin' AND u.email IS NOT NULL AND u.email <> ''"
-    )->fetchAll(),
-    'email'
-);
+$admins = $pdo->query(
+    "SELECT u.email, u.phone FROM users u JOIN roles r ON r.id = u.role_id
+     WHERE r.name = 'Super Admin'"
+)->fetchAll();
+$adminEmails = array_column(array_filter($admins, function ($u) {
+    return !empty($u['email']);
+}), 'email');
+$adminPhones = array_column(array_filter($admins, function ($u) {
+    return !empty($u['phone']);
+}), 'phone');
 
 $today = new DateTime('today');
 $sentCount = 0;
@@ -49,6 +53,10 @@ foreach ($rows as $row) {
         foreach ($adminEmails as $email) {
             mail($email, $subject, $body, $headers);
             $sentCount++;
+        }
+
+        foreach ($adminPhones as $phone) {
+            sendSmsReminder($phone, "$subject\n\n$body");
         }
 
         if ($diffDays === $REMINDER_DAYS_BEFORE) {

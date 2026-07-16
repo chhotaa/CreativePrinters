@@ -2,6 +2,11 @@
 # live inside this repo at all - see app/includes/db_credentials.example.php
 # for where the real file actually belongs (account root, above public_html).
 db_credentials.php
+
+# Real SMS/WhatsApp provider credentials - same story as db_credentials.php,
+# see app/includes/sms_credentials.example.php for the template.
+sms_credentials.php
+
 app/README.md
 README.md
 
