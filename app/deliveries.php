@@ -103,11 +103,40 @@ $pos = $canEdit ? $pdo->query(
 )->fetchAll() : [];
 
 $deliveries = $pdo->query(
-    "SELECT d.*, po.po_number, po.customer_name, po.item_code, po.description
+    "SELECT d.*, po.po_number, po.customer_name, po.item_code, po.description, po.total_quantity AS po_total_quantity
      FROM deliveries d
      JOIN purchase_orders po ON po.id = d.po_id
-     ORDER BY d.due_date ASC"
+     ORDER BY po.po_number ASC, po.item_code ASC, d.due_date ASC"
 )->fetchAll();
+
+// Group deliveries by their PO row (po_id) so the table can render as a
+// list of PO sections instead of one flat list. Each group also carries
+// aggregate stats used in the header row.
+$deliveryGroups = [];
+foreach ($deliveries as $d) {
+    $key = $d['po_id'];
+    if (!isset($deliveryGroups[$key])) {
+        $deliveryGroups[$key] = [
+            'po_id' => $d['po_id'],
+            'po_number' => $d['po_number'],
+            'customer_name' => $d['customer_name'],
+            'item_code' => $d['item_code'],
+            'description' => $d['description'],
+            'po_total_quantity' => (int)$d['po_total_quantity'],
+            'scheduled_qty' => 0,
+            'delivered_qty' => 0,
+            'has_undelivered' => false,
+            'rows' => [],
+        ];
+    }
+    $deliveryGroups[$key]['scheduled_qty'] += (int)$d['quantity'];
+    if ($d['status'] === 'Delivered') {
+        $deliveryGroups[$key]['delivered_qty'] += (int)$d['quantity'];
+    } else {
+        $deliveryGroups[$key]['has_undelivered'] = true;
+    }
+    $deliveryGroups[$key]['rows'][] = $d;
+}
 
 $pageTitle = 'Delivery Schedule';
 include __DIR__ . '/includes/layout_start.php';
@@ -186,53 +215,76 @@ include __DIR__ . '/includes/layout_start.php';
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <input type="text" id="deliveriesTableSearch" placeholder="Search deliveries..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <label class="flex items-center gap-2 text-sm text-slate-600">
-                Show
-                <select id="deliveriesTablePageSize" class="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="all">All</option>
-                </select>
-                entries
-            </label>
+            <div class="flex flex-wrap items-center gap-2">
+                <div id="deliveryFilterTabs" class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
+                    <button type="button" data-filter="all" class="filter-tab active px-3 py-1.5 font-semibold text-white bg-brand-dark">All</button>
+                    <button type="button" data-filter="Pending" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Pending</button>
+                    <button type="button" data-filter="Shipped" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Shipped</button>
+                    <button type="button" data-filter="Delivered" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Delivered</button>
+                </div>
+                <label id="archiveToggleWrap" class="hidden flex items-center gap-1.5 text-xs text-slate-600 ml-2">
+                    <input type="checkbox" id="includeArchive" class="rounded border-slate-300 text-brand-green focus:ring-brand-green">
+                    Include archive (delivered 30+ days ago)
+                </label>
+            </div>
+            <input type="text" id="deliverySearch" placeholder="Search PO, customer, item..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
         </div>
-        <div class="overflow-x-auto">
-        <table id="deliveriesTable" class="w-full text-sm border-collapse">
-            <thead>
+        <div class="overflow-x-auto max-h-[65vh] overflow-y-auto border border-slate-100 rounded-md">
+        <table class="w-full text-sm border-collapse">
+            <thead class="sticky top-0 z-10">
                 <tr class="bg-brand-dark text-white">
-                    <th class="text-left px-3 py-2 font-semibold rounded-tl-md">PO Number</th>
-                    <th class="text-left px-3 py-2 font-semibold">Customer</th>
-                    <th class="text-left px-3 py-2 font-semibold">Item</th>
                     <th class="text-left px-3 py-2 font-semibold">Due Date</th>
                     <th class="text-left px-3 py-2 font-semibold">Qty</th>
                     <th class="text-left px-3 py-2 font-semibold">Status</th>
-                    <?php if ($canEdit): ?><th class="text-left px-3 py-2 font-semibold">Reminder Sent</th><?php endif; ?>
-                    <th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th>
+                    <th class="text-left px-3 py-2 font-semibold"></th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="deliveryGroups">
             <?php
             $deliveryStatusBadge = [
                 'Pending' => 'bg-amber-100 text-amber-800',
                 'Shipped' => 'bg-blue-100 text-blue-800',
                 'Delivered' => 'bg-green-100 text-green-800',
             ];
-            foreach ($deliveries as $d):
-                $due = new DateTime($d['due_date']);
-                $today = new DateTime('today');
-                $diff = (int)$today->diff($due)->format('%r%a');
-                $rowClass = '';
-                if ($d['status'] !== 'Delivered' && $diff < 0) $rowClass = 'bg-red-50';
-                elseif ($d['status'] !== 'Delivered' && $diff <= 3) $rowClass = 'bg-amber-50';
-                $badgeClass = $deliveryStatusBadge[$d['status']] ?? 'bg-slate-100 text-slate-700';
+            if (empty($deliveryGroups)):
             ?>
-                <tr class="border-b border-slate-100 hover:bg-slate-50 <?= $rowClass ?>">
-                    <td class="px-3 py-2"><?= htmlspecialchars($d['po_number']) ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($d['customer_name']) ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($d['item_code']) ?> - <?= htmlspecialchars($d['description']) ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($d['due_date']) ?></td>
+                <tr><td colspan="4" class="px-3 py-6 text-center text-slate-400">No deliveries scheduled yet.</td></tr>
+            <?php endif; ?>
+            <?php foreach ($deliveryGroups as $group): ?>
+                <tr class="po-group-header bg-slate-100 border-t border-b-2 border-slate-300 cursor-pointer" data-group-id="<?= $group['po_id'] ?>" onclick="togglePoGroup(<?= $group['po_id'] ?>)">
+                    <td colspan="4" class="px-3 py-2">
+                        <div class="flex items-center gap-2 text-sm">
+                            <span class="chevron transition-transform inline-block w-3">▾</span>
+                            <span class="font-semibold text-brand-dark"><?= htmlspecialchars($group['po_number']) ?></span>
+                            <span class="text-slate-400">·</span>
+                            <span class="text-slate-700"><?= htmlspecialchars($group['customer_name']) ?></span>
+                            <span class="text-slate-400">·</span>
+                            <span class="text-slate-600"><?= htmlspecialchars($group['item_code']) ?> — <?= htmlspecialchars($group['description']) ?></span>
+                            <span class="ml-auto text-xs text-slate-500">
+                                <?= $group['delivered_qty'] ?> delivered of <?= $group['scheduled_qty'] ?> scheduled · PO total <?= $group['po_total_quantity'] ?>
+                            </span>
+                        </div>
+                    </td>
+                </tr>
+                <?php foreach ($group['rows'] as $d):
+                    $due = new DateTime($d['due_date']);
+                    $today = new DateTime('today');
+                    $diff = (int)$today->diff($due)->format('%r%a');
+                    $rowClass = '';
+                    if ($d['status'] !== 'Delivered' && $diff < 0) $rowClass = 'bg-red-50';
+                    elseif ($d['status'] !== 'Delivered' && $diff <= 3) $rowClass = 'bg-amber-50';
+                    $badgeClass = $deliveryStatusBadge[$d['status']] ?? 'bg-slate-100 text-slate-700';
+                    // Days since delivered (for archive-hide logic). Compute
+                    // from $bill->diff($today) so the value is positive when
+                    // the delivery happened in the past.
+                    $daysSinceDelivered = null;
+                    if ($d['status'] === 'Delivered' && !empty($d['bill_date'])) {
+                        $bill = new DateTime($d['bill_date']);
+                        $daysSinceDelivered = (int)$bill->diff($today)->format('%r%a');
+                    }
+                ?>
+                <tr class="delivery-row border-b border-slate-100 hover:bg-slate-50 <?= $rowClass ?>" data-group-id="<?= $group['po_id'] ?>" data-status="<?= htmlspecialchars($d['status']) ?>" data-search="<?= htmlspecialchars(strtolower($d['po_number'] . ' ' . $d['customer_name'] . ' ' . $d['item_code'] . ' ' . $d['description'])) ?>" data-days-since-delivered="<?= $daysSinceDelivered ?? '' ?>">
+                    <td class="px-3 py-2 pl-8"><?= htmlspecialchars($d['due_date']) ?></td>
                     <td class="px-3 py-2"><?= $d['quantity'] ?></td>
                     <?php if ($canEdit): ?>
                     <td class="px-3 py-2">
@@ -249,7 +301,6 @@ include __DIR__ . '/includes/layout_start.php';
                     <?php else: ?>
                     <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold <?= $badgeClass ?>"><?= htmlspecialchars($d['status']) ?></span></td>
                     <?php endif; ?>
-                    <?php if ($canEdit): ?><td class="px-3 py-2"><?= htmlspecialchars($d['reminder_sent']) ?></td><?php endif; ?>
                     <td class="px-3 py-2 whitespace-nowrap">
                         <?php if ($d['status'] === 'Delivered' && $d['dc_number']): ?>
                             <button type="button" onclick="viewDeliveryDetails(<?= $d['id'] ?>)" title="View delivery details" class="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer align-middle">
@@ -264,15 +315,28 @@ include __DIR__ . '/includes/layout_start.php';
                         <?php endif; ?>
                     </td>
                 </tr>
+                <?php endforeach; ?>
             <?php endforeach; ?>
             </tbody>
         </table>
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm text-slate-600">
-            <span id="deliveriesTableInfo"></span>
-            <div class="flex gap-2">
-                <button type="button" id="deliveriesTablePrev" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-                <button type="button" id="deliveriesTableNext" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-slate-500">
+            <div id="deliveryFilterInfo"></div>
+            <div class="flex items-center gap-3">
+                <label class="flex items-center gap-1.5">
+                    Show
+                    <select id="deliveryPageSize" class="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="all">All</option>
+                    </select>
+                    POs
+                </label>
+                <div class="flex gap-1">
+                    <button type="button" id="deliveryPrev" class="px-3 py-1 rounded-md border border-slate-300 font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+                    <button type="button" id="deliveryNext" class="px-3 py-1 rounded-md border border-slate-300 font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+                </div>
             </div>
         </div>
     </div>
@@ -377,5 +441,122 @@ include __DIR__ . '/includes/layout_start.php';
         function closeViewDetailsModal() {
             document.getElementById('viewDetailsModal').classList.add('hidden');
         }
+
+        // Filter tabs + search + archive toggle + collapsible PO groups.
+        (function () {
+            var currentFilter = 'all';
+            var searchInput = document.getElementById('deliverySearch');
+            var archiveToggle = document.getElementById('includeArchive');
+            var archiveToggleWrap = document.getElementById('archiveToggleWrap');
+            var infoEl = document.getElementById('deliveryFilterInfo');
+            var tabs = document.querySelectorAll('.filter-tab');
+            var pageSizeSelect = document.getElementById('deliveryPageSize');
+            var prevBtn = document.getElementById('deliveryPrev');
+            var nextBtn = document.getElementById('deliveryNext');
+            var collapsedGroups = {};
+            var currentPage = 1;
+
+            function applyFilters() {
+                var searchText = searchInput.value.trim().toLowerCase();
+                var showArchive = archiveToggle.checked;
+                var visibleByGroup = {};
+
+                // Pass 1: figure out which rows would pass filters (independent
+                // of collapsed state), so we know which group headers to show.
+                var passesFilterByRow = new Map();
+                document.querySelectorAll('.delivery-row').forEach(function (row) {
+                    var status = row.dataset.status;
+                    var searchable = row.dataset.search;
+                    var groupId = row.dataset.groupId;
+                    var daysSinceDelivered = row.dataset.daysSinceDelivered;
+                    var passStatus = currentFilter === 'all' || status === currentFilter;
+                    var passSearch = !searchText || searchable.indexOf(searchText) !== -1;
+                    var passArchive = true;
+                    if (!showArchive && status === 'Delivered' && daysSinceDelivered !== '' && parseInt(daysSinceDelivered, 10) >= 30) {
+                        passArchive = false;
+                    }
+                    var passes = passStatus && passSearch && passArchive;
+                    passesFilterByRow.set(row, passes);
+                    if (passes) visibleByGroup[groupId] = (visibleByGroup[groupId] || 0) + 1;
+                });
+
+                // Pass 2: figure out which groups are on the current page.
+                var eligibleGroupIds = [];
+                document.querySelectorAll('.po-group-header').forEach(function (header) {
+                    var groupId = header.dataset.groupId;
+                    if ((visibleByGroup[groupId] || 0) > 0) eligibleGroupIds.push(groupId);
+                });
+
+                var pageSizeVal = pageSizeSelect.value;
+                var pageSize = pageSizeVal === 'all' ? eligibleGroupIds.length : parseInt(pageSizeVal, 10);
+                var totalPages = pageSize > 0 ? Math.max(1, Math.ceil(eligibleGroupIds.length / pageSize)) : 1;
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+                var startIdx = pageSize > 0 ? (currentPage - 1) * pageSize : 0;
+                var endIdx = pageSize > 0 ? startIdx + pageSize : eligibleGroupIds.length;
+                var pageGroupIds = new Set(eligibleGroupIds.slice(startIdx, endIdx));
+
+                // Pass 3: apply the actual visibility to headers and rows.
+                var visibleGroupCount = 0;
+                var totalVisible = 0;
+                document.querySelectorAll('.po-group-header').forEach(function (header) {
+                    var groupId = header.dataset.groupId;
+                    if (!pageGroupIds.has(groupId)) {
+                        header.style.display = 'none';
+                    } else {
+                        header.style.display = '';
+                        visibleGroupCount++;
+                        totalVisible += visibleByGroup[groupId] || 0;
+                    }
+                });
+                passesFilterByRow.forEach(function (passes, row) {
+                    var groupId = row.dataset.groupId;
+                    var onPage = pageGroupIds.has(groupId);
+                    var collapsed = !!collapsedGroups[groupId];
+                    row.style.display = (passes && !collapsed && onPage) ? '' : 'none';
+                });
+
+                var pageInfo = eligibleGroupIds.length === 0
+                    ? 'No deliveries match this view.'
+                    : 'Showing POs ' + (startIdx + 1) + '–' + Math.min(endIdx, eligibleGroupIds.length)
+                        + ' of ' + eligibleGroupIds.length
+                        + ' (' + totalVisible + ' deliverie' + (totalVisible === 1 ? '' : 's') + ' on this page)';
+                infoEl.textContent = pageInfo;
+
+                prevBtn.disabled = currentPage <= 1;
+                nextBtn.disabled = currentPage >= totalPages;
+
+                archiveToggleWrap.classList.toggle('hidden', currentFilter === 'Pending' || currentFilter === 'Shipped');
+            }
+
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    tabs.forEach(function (t) {
+                        t.classList.remove('active', 'bg-brand-dark', 'text-white', 'font-semibold');
+                        t.classList.add('text-slate-600', 'font-medium');
+                    });
+                    tab.classList.add('active', 'bg-brand-dark', 'text-white', 'font-semibold');
+                    tab.classList.remove('text-slate-600', 'font-medium');
+                    currentFilter = tab.dataset.filter;
+                    currentPage = 1;
+                    applyFilters();
+                });
+            });
+
+            searchInput.addEventListener('input', function () { currentPage = 1; applyFilters(); });
+            archiveToggle.addEventListener('change', function () { currentPage = 1; applyFilters(); });
+            pageSizeSelect.addEventListener('change', function () { currentPage = 1; applyFilters(); });
+            prevBtn.addEventListener('click', function () { currentPage--; applyFilters(); });
+            nextBtn.addEventListener('click', function () { currentPage++; applyFilters(); });
+
+            window.togglePoGroup = function (groupId) {
+                collapsedGroups[groupId] = !collapsedGroups[groupId];
+                var chevron = document.querySelector('.po-group-header[data-group-id="' + groupId + '"] .chevron');
+                if (chevron) chevron.style.transform = collapsedGroups[groupId] ? 'rotate(-90deg)' : '';
+                applyFilters();
+            };
+
+            applyFilters();
+        })();
     </script>
 <?php include __DIR__ . '/includes/layout_end.php'; ?>
