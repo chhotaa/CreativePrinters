@@ -109,33 +109,43 @@ $deliveries = $pdo->query(
      ORDER BY po.po_number ASC, po.item_code ASC, d.due_date ASC"
 )->fetchAll();
 
-// Group deliveries by their PO row (po_id) so the table can render as a
-// list of PO sections instead of one flat list. Each group also carries
-// aggregate stats used in the header row.
-$deliveryGroups = [];
+// Two-level grouping so the table renders nested: an outer group per
+// PO Number (+ Customer), inside which one or more item-code sub-groups
+// cluster the actual delivery rows. A single PO Number can span
+// multiple purchase_orders rows if that PO covers multiple item codes.
+$deliveryOuters = [];
 foreach ($deliveries as $d) {
-    $key = $d['po_id'];
-    if (!isset($deliveryGroups[$key])) {
-        $deliveryGroups[$key] = [
-            'po_id' => $d['po_id'],
+    $outerKey = $d['po_number'];
+    if (!isset($deliveryOuters[$outerKey])) {
+        $deliveryOuters[$outerKey] = [
             'po_number' => $d['po_number'],
             'customer_name' => $d['customer_name'],
+            'scheduled_qty' => 0,
+            'delivered_qty' => 0,
+            'po_total_quantity' => 0,
+            'inner_groups' => [],
+        ];
+    }
+    $innerKey = $d['po_id'];
+    if (!isset($deliveryOuters[$outerKey]['inner_groups'][$innerKey])) {
+        $deliveryOuters[$outerKey]['inner_groups'][$innerKey] = [
+            'po_id' => $d['po_id'],
             'item_code' => $d['item_code'],
             'description' => $d['description'],
             'po_total_quantity' => (int)$d['po_total_quantity'],
             'scheduled_qty' => 0,
             'delivered_qty' => 0,
-            'has_undelivered' => false,
             'rows' => [],
         ];
+        $deliveryOuters[$outerKey]['po_total_quantity'] += (int)$d['po_total_quantity'];
     }
-    $deliveryGroups[$key]['scheduled_qty'] += (int)$d['quantity'];
+    $deliveryOuters[$outerKey]['inner_groups'][$innerKey]['scheduled_qty'] += (int)$d['quantity'];
+    $deliveryOuters[$outerKey]['scheduled_qty'] += (int)$d['quantity'];
     if ($d['status'] === 'Delivered') {
-        $deliveryGroups[$key]['delivered_qty'] += (int)$d['quantity'];
-    } else {
-        $deliveryGroups[$key]['has_undelivered'] = true;
+        $deliveryOuters[$outerKey]['inner_groups'][$innerKey]['delivered_qty'] += (int)$d['quantity'];
+        $deliveryOuters[$outerKey]['delivered_qty'] += (int)$d['quantity'];
     }
-    $deliveryGroups[$key]['rows'][] = $d;
+    $deliveryOuters[$outerKey]['inner_groups'][$innerKey]['rows'][] = $d;
 }
 
 // Bucket deliveries into time windows (for the Cards view) and status
@@ -289,20 +299,37 @@ include __DIR__ . '/includes/layout_start.php';
                 'Shipped' => 'bg-blue-100 text-blue-800',
                 'Delivered' => 'bg-green-100 text-green-800',
             ];
-            if (empty($deliveryGroups)):
+            if (empty($deliveryOuters)):
             ?>
                 <tr><td colspan="4" class="px-3 py-6 text-center text-slate-400">No deliveries scheduled yet.</td></tr>
             <?php endif; ?>
-            <?php foreach ($deliveryGroups as $group): ?>
-                <tr class="po-group-header bg-slate-100 border-t border-b-2 border-slate-300 cursor-pointer" data-group-id="<?= $group['po_id'] ?>" onclick="togglePoGroup(<?= $group['po_id'] ?>)">
+            <?php foreach ($deliveryOuters as $outer):
+                $outerKeyAttr = htmlspecialchars($outer['po_number']);
+                $outerItemCount = count($outer['inner_groups']);
+            ?>
+                <tr class="po-outer-header bg-brand-dark text-white border-t-2 border-brand-dark cursor-pointer" data-outer-key="<?= $outerKeyAttr ?>" onclick="toggleOuterGroup('<?= $outerKeyAttr ?>')">
                     <td colspan="4" class="px-3 py-2">
                         <div class="flex items-center gap-2 text-sm">
+                            <span class="outer-chevron transition-transform inline-block w-3">▾</span>
+                            <span class="font-semibold"><?= htmlspecialchars($outer['po_number']) ?></span>
+                            <span class="text-white/60">·</span>
+                            <span><?= htmlspecialchars($outer['customer_name']) ?></span>
+                            <span class="ml-auto text-xs text-white/70">
+                                <?= $outerItemCount ?> item<?= $outerItemCount === 1 ? '' : 's' ?> ·
+                                <?= $outer['delivered_qty'] ?> delivered of <?= $outer['scheduled_qty'] ?> scheduled ·
+                                PO total <?= $outer['po_total_quantity'] ?>
+                            </span>
+                        </div>
+                    </td>
+                </tr>
+                <?php foreach ($outer['inner_groups'] as $group): ?>
+                <tr class="po-group-header bg-slate-100 border-t border-b border-slate-300 cursor-pointer" data-group-id="<?= $group['po_id'] ?>" data-outer-key="<?= $outerKeyAttr ?>" onclick="togglePoGroup(<?= $group['po_id'] ?>)">
+                    <td colspan="4" class="px-3 py-2 pl-6">
+                        <div class="flex items-center gap-2 text-sm">
                             <span class="chevron transition-transform inline-block w-3">▾</span>
-                            <span class="font-semibold text-brand-dark"><?= htmlspecialchars($group['po_number']) ?></span>
-                            <span class="text-slate-400">·</span>
-                            <span class="text-slate-700"><?= htmlspecialchars($group['customer_name']) ?></span>
-                            <span class="text-slate-400">·</span>
-                            <span class="text-slate-600"><?= htmlspecialchars($group['item_code']) ?> — <?= htmlspecialchars($group['description']) ?></span>
+                            <span class="font-semibold text-brand-dark"><?= htmlspecialchars($group['item_code']) ?></span>
+                            <span class="text-slate-400">—</span>
+                            <span class="text-slate-700"><?= htmlspecialchars($group['description']) ?></span>
                             <span class="ml-auto text-xs text-slate-500">
                                 <?= $group['delivered_qty'] ?> delivered of <?= $group['scheduled_qty'] ?> scheduled · PO total <?= $group['po_total_quantity'] ?>
                             </span>
@@ -317,17 +344,14 @@ include __DIR__ . '/includes/layout_start.php';
                     if ($d['status'] !== 'Delivered' && $diff < 0) $rowClass = 'bg-red-50';
                     elseif ($d['status'] !== 'Delivered' && $diff <= 3) $rowClass = 'bg-amber-50';
                     $badgeClass = $deliveryStatusBadge[$d['status']] ?? 'bg-slate-100 text-slate-700';
-                    // Days since delivered (for archive-hide logic). Compute
-                    // from $bill->diff($today) so the value is positive when
-                    // the delivery happened in the past.
                     $daysSinceDelivered = null;
                     if ($d['status'] === 'Delivered' && !empty($d['bill_date'])) {
                         $bill = new DateTime($d['bill_date']);
                         $daysSinceDelivered = (int)$bill->diff($today)->format('%r%a');
                     }
                 ?>
-                <tr class="delivery-row border-b border-slate-100 hover:bg-slate-50 <?= $rowClass ?>" data-group-id="<?= $group['po_id'] ?>" data-status="<?= htmlspecialchars($d['status']) ?>" data-search="<?= htmlspecialchars(strtolower($d['po_number'] . ' ' . $d['customer_name'] . ' ' . $d['item_code'] . ' ' . $d['description'])) ?>" data-days-since-delivered="<?= $daysSinceDelivered ?? '' ?>">
-                    <td class="px-3 py-2 pl-8"><?= htmlspecialchars($d['due_date']) ?></td>
+                <tr class="delivery-row border-b border-slate-100 hover:bg-slate-50 <?= $rowClass ?>" data-group-id="<?= $group['po_id'] ?>" data-outer-key="<?= $outerKeyAttr ?>" data-status="<?= htmlspecialchars($d['status']) ?>" data-search="<?= htmlspecialchars(strtolower($d['po_number'] . ' ' . $d['customer_name'] . ' ' . $d['item_code'] . ' ' . $d['description'])) ?>" data-days-since-delivered="<?= $daysSinceDelivered ?? '' ?>">
+                    <td class="px-3 py-2 pl-12"><?= htmlspecialchars($d['due_date']) ?></td>
                     <td class="px-3 py-2"><?= $d['quantity'] ?></td>
                     <?php if ($canEdit): ?>
                     <td class="px-3 py-2">
@@ -358,6 +382,7 @@ include __DIR__ . '/includes/layout_start.php';
                         <?php endif; ?>
                     </td>
                 </tr>
+                <?php endforeach; ?>
                 <?php endforeach; ?>
             <?php endforeach; ?>
             </tbody>
@@ -602,6 +627,7 @@ include __DIR__ . '/includes/layout_start.php';
             var cardsViewEl = document.getElementById('cardsView');
             var kanbanViewEl = document.getElementById('kanbanView');
             var collapsedGroups = {};
+            var collapsedOuters = {};
             var currentPage = 1;
 
             // Shared filter predicate: whether a delivery card/row passes the
@@ -667,15 +693,16 @@ include __DIR__ . '/includes/layout_start.php';
             function applyTableFilter() {
                 var searchText = searchInput.value.trim().toLowerCase();
                 var showArchive = archiveToggle.checked;
-                var visibleByGroup = {};
+                var visibleByInner = {};   // po_id -> count of passing rows
+                var visibleByOuter = {};   // po_number -> count of passing rows
 
-                // Pass 1: figure out which rows would pass filters (independent
-                // of collapsed state), so we know which group headers to show.
+                // Pass 1: which rows pass filters?
                 var passesFilterByRow = new Map();
                 document.querySelectorAll('.delivery-row').forEach(function (row) {
                     var status = row.dataset.status;
                     var searchable = row.dataset.search;
-                    var groupId = row.dataset.groupId;
+                    var innerKey = row.dataset.groupId;
+                    var outerKey = row.dataset.outerKey;
                     var daysSinceDelivered = row.dataset.daysSinceDelivered;
                     var passStatus = currentFilter === 'all' || status === currentFilter;
                     var passSearch = !searchText || searchable.indexOf(searchText) !== -1;
@@ -685,50 +712,57 @@ include __DIR__ . '/includes/layout_start.php';
                     }
                     var passes = passStatus && passSearch && passArchive;
                     passesFilterByRow.set(row, passes);
-                    if (passes) visibleByGroup[groupId] = (visibleByGroup[groupId] || 0) + 1;
+                    if (passes) {
+                        visibleByInner[innerKey] = (visibleByInner[innerKey] || 0) + 1;
+                        visibleByOuter[outerKey] = (visibleByOuter[outerKey] || 0) + 1;
+                    }
                 });
 
-                // Pass 2: figure out which groups are on the current page.
-                var eligibleGroupIds = [];
-                document.querySelectorAll('.po-group-header').forEach(function (header) {
-                    var groupId = header.dataset.groupId;
-                    if ((visibleByGroup[groupId] || 0) > 0) eligibleGroupIds.push(groupId);
+                // Pass 2: paginate by outer group (PO Number).
+                var eligibleOuterKeys = [];
+                document.querySelectorAll('.po-outer-header').forEach(function (header) {
+                    var key = header.dataset.outerKey;
+                    if ((visibleByOuter[key] || 0) > 0) eligibleOuterKeys.push(key);
                 });
 
                 var pageSizeVal = pageSizeSelect.value;
-                var pageSize = pageSizeVal === 'all' ? eligibleGroupIds.length : parseInt(pageSizeVal, 10);
-                var totalPages = pageSize > 0 ? Math.max(1, Math.ceil(eligibleGroupIds.length / pageSize)) : 1;
+                var pageSize = pageSizeVal === 'all' ? eligibleOuterKeys.length : parseInt(pageSizeVal, 10);
+                var totalPages = pageSize > 0 ? Math.max(1, Math.ceil(eligibleOuterKeys.length / pageSize)) : 1;
                 if (currentPage > totalPages) currentPage = totalPages;
                 if (currentPage < 1) currentPage = 1;
                 var startIdx = pageSize > 0 ? (currentPage - 1) * pageSize : 0;
-                var endIdx = pageSize > 0 ? startIdx + pageSize : eligibleGroupIds.length;
-                var pageGroupIds = new Set(eligibleGroupIds.slice(startIdx, endIdx));
+                var endIdx = pageSize > 0 ? startIdx + pageSize : eligibleOuterKeys.length;
+                var pageOuterKeys = new Set(eligibleOuterKeys.slice(startIdx, endIdx));
 
-                // Pass 3: apply the actual visibility to headers and rows.
-                var visibleGroupCount = 0;
-                var totalVisible = 0;
+                // Pass 3: apply visibility across three levels (outer, inner, row).
+                var totalVisibleRows = 0;
+                document.querySelectorAll('.po-outer-header').forEach(function (header) {
+                    var key = header.dataset.outerKey;
+                    header.style.display = pageOuterKeys.has(key) ? '' : 'none';
+                    if (pageOuterKeys.has(key)) totalVisibleRows += visibleByOuter[key] || 0;
+                });
                 document.querySelectorAll('.po-group-header').forEach(function (header) {
-                    var groupId = header.dataset.groupId;
-                    if (!pageGroupIds.has(groupId)) {
-                        header.style.display = 'none';
-                    } else {
-                        header.style.display = '';
-                        visibleGroupCount++;
-                        totalVisible += visibleByGroup[groupId] || 0;
-                    }
+                    var innerKey = header.dataset.groupId;
+                    var outerKey = header.dataset.outerKey;
+                    var onPage = pageOuterKeys.has(outerKey);
+                    var outerCollapsed = !!collapsedOuters[outerKey];
+                    var hasContent = (visibleByInner[innerKey] || 0) > 0;
+                    header.style.display = (onPage && !outerCollapsed && hasContent) ? '' : 'none';
                 });
                 passesFilterByRow.forEach(function (passes, row) {
-                    var groupId = row.dataset.groupId;
-                    var onPage = pageGroupIds.has(groupId);
-                    var collapsed = !!collapsedGroups[groupId];
-                    row.style.display = (passes && !collapsed && onPage) ? '' : 'none';
+                    var innerKey = row.dataset.groupId;
+                    var outerKey = row.dataset.outerKey;
+                    var onPage = pageOuterKeys.has(outerKey);
+                    var outerCollapsed = !!collapsedOuters[outerKey];
+                    var innerCollapsed = !!collapsedGroups[innerKey];
+                    row.style.display = (passes && onPage && !outerCollapsed && !innerCollapsed) ? '' : 'none';
                 });
 
-                var pageInfo = eligibleGroupIds.length === 0
+                var pageInfo = eligibleOuterKeys.length === 0
                     ? 'No deliveries match this view.'
-                    : 'Showing POs ' + (startIdx + 1) + '–' + Math.min(endIdx, eligibleGroupIds.length)
-                        + ' of ' + eligibleGroupIds.length
-                        + ' (' + totalVisible + ' deliverie' + (totalVisible === 1 ? '' : 's') + ' on this page)';
+                    : 'Showing POs ' + (startIdx + 1) + '–' + Math.min(endIdx, eligibleOuterKeys.length)
+                        + ' of ' + eligibleOuterKeys.length
+                        + ' (' + totalVisibleRows + ' deliverie' + (totalVisibleRows === 1 ? '' : 's') + ' on this page)';
                 infoEl.textContent = pageInfo;
 
                 prevBtn.disabled = currentPage <= 1;
@@ -783,6 +817,14 @@ include __DIR__ . '/includes/layout_start.php';
                 collapsedGroups[groupId] = !collapsedGroups[groupId];
                 var chevron = document.querySelector('.po-group-header[data-group-id="' + groupId + '"] .chevron');
                 if (chevron) chevron.style.transform = collapsedGroups[groupId] ? 'rotate(-90deg)' : '';
+                applyFilters();
+            };
+
+            window.toggleOuterGroup = function (outerKey) {
+                collapsedOuters[outerKey] = !collapsedOuters[outerKey];
+                var attr = outerKey.replace(/"/g, '\\"');
+                var chevron = document.querySelector('.po-outer-header[data-outer-key="' + attr + '"] .outer-chevron');
+                if (chevron) chevron.style.transform = collapsedOuters[outerKey] ? 'rotate(-90deg)' : '';
                 applyFilters();
             };
 
