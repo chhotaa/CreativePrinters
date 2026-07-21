@@ -125,7 +125,7 @@ include __DIR__ . '/includes/layout_start.php';
         <p class="text-sm text-slate-500 mt-2">A new role starts with no access anywhere — set its permissions below once created.</p>
     </div>
 
-    <p class="text-sm text-white/90 mb-4 drop-shadow-sm">"Super Admin" always has full access everywhere and isn't shown here. Each role's column saves independently — changing one role does not affect the others.</p>
+    <p class="text-sm text-slate-900 bg-white/90 rounded-md px-3 py-2 mb-4">"Super Admin" always has full access everywhere and isn't shown here. Each role's column saves independently — changing one role does not affect the others.</p>
 
     <?php foreach ($roles as $role): ?>
         <form method="POST" id="role-form-<?= $role['id'] ?>">
