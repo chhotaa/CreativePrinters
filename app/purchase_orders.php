@@ -66,12 +66,30 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])
                 } else {
                     $pdo->beginTransaction();
                     try {
+                        // Resolve or create the customer master record.
+                        // Match is case-insensitive and trim-tolerant so
+                        // "ABC Traders", "abc traders " all link to one row.
+                        $findCustomer = $pdo->prepare(
+                            'SELECT id, name FROM customers WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1'
+                        );
+                        $findCustomer->execute([$customer]);
+                        $existing = $findCustomer->fetch();
+                        if ($existing) {
+                            $customerId = (int)$existing['id'];
+                            // Prefer the canonical name from the master.
+                            $customer = $existing['name'];
+                        } else {
+                            $createCustomer = $pdo->prepare('INSERT INTO customers (name) VALUES (?)');
+                            $createCustomer->execute([$customer]);
+                            $customerId = (int)$pdo->lastInsertId();
+                        }
+
                         $stmt = $pdo->prepare(
-                            'INSERT INTO purchase_orders (po_number, po_date, customer_name, item_code, description, total_quantity)
-                             VALUES (?, ?, ?, ?, ?, ?)'
+                            'INSERT INTO purchase_orders (po_number, po_date, customer_name, customer_id, item_code, description, total_quantity)
+                             VALUES (?, ?, ?, ?, ?, ?, ?)'
                         );
                         foreach ($items as $item) {
-                            $stmt->execute([$poNumber, $poDate, $customer, $item['item_code'], $item['description'], $item['total_quantity']]);
+                            $stmt->execute([$poNumber, $poDate, $customer, $customerId, $item['item_code'], $item['description'], $item['total_quantity']]);
                         }
                         $pdo->commit();
                         $count = count($items);
@@ -90,7 +108,15 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])
 }
 
 $existingCustomers = $pdo->query('SELECT name FROM customers ORDER BY name')->fetchAll();
-$pos = $pdo->query('SELECT * FROM purchase_orders ORDER BY po_date DESC, id DESC')->fetchAll();
+// Prefer the linked customer's current name (so a rename on the Customers
+// page flows through to every PO); fall back to the legacy free-text field
+// for rows that pre-date the customer-linking migration.
+$pos = $pdo->query(
+    'SELECT po.*, COALESCE(c.name, po.customer_name) AS customer_display
+     FROM purchase_orders po
+     LEFT JOIN customers c ON c.id = po.customer_id
+     ORDER BY po.po_date DESC, po.id DESC'
+)->fetchAll();
 $pageTitle = 'Purchase Orders';
 include __DIR__ . '/includes/layout_start.php';
 ?>
@@ -102,12 +128,7 @@ include __DIR__ . '/includes/layout_start.php';
             <div class="flex flex-wrap gap-2 items-center mb-4">
                 <input type="text" name="po_number" placeholder="PO Number (e.g. HT64023370)" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
                 <input type="date" name="po_date" title="PO Date" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                <input type="text" name="customer_name" list="po-customer-names" placeholder="Customer name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                <datalist id="po-customer-names">
-                    <?php foreach ($existingCustomers as $c): ?>
-                        <option value="<?= htmlspecialchars($c['name']) ?>"></option>
-                    <?php endforeach; ?>
-                </datalist>
+                <input type="text" id="po-customer-input" name="customer_name" placeholder="Customer name" required autocomplete="off" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             </div>
 
             <div class="text-xs font-semibold text-slate-500 mb-2">Items</div>
@@ -126,7 +147,13 @@ include __DIR__ . '/includes/layout_start.php';
             </div>
         </form>
     </div>
+    <script src="autocomplete.js"></script>
     <script>
+        attachAutocomplete(
+            document.getElementById('po-customer-input'),
+            <?= json_encode(array_map(fn($c) => $c['name'], $existingCustomers), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+        );
+
         function addPoItemRow() {
             var rows = document.getElementById('poItemRows');
             var newRow = rows.querySelector('.po-item-row').cloneNode(true);
@@ -173,7 +200,7 @@ include __DIR__ . '/includes/layout_start.php';
                 <tr class="border-b border-slate-100 even:bg-slate-50 hover:bg-slate-100">
                     <td class="px-3 py-2"><?= htmlspecialchars($po['po_number']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['po_date']) ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($po['customer_name']) ?></td>
+                    <td class="px-3 py-2"><?= htmlspecialchars($po['customer_display']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['item_code']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['description']) ?></td>
                     <td class="px-3 py-2"><?= $po['total_quantity'] ?></td>

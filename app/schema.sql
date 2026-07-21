@@ -76,11 +76,14 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   po_number VARCHAR(100) NOT NULL,
   po_date DATE NULL,
   customer_name VARCHAR(150) NOT NULL,
+  customer_id INT NULL,
   item_code VARCHAR(100),
   description VARCHAR(255),
   total_quantity INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_po_item (po_number, item_code)
+  UNIQUE KEY unique_po_item (po_number, item_code),
+  INDEX idx_purchase_orders_customer_id (customer_id)
+  -- FK on customer_id added at end of file (customers table is defined later)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- A single PO can have MANY delivery due dates (split/batch deliveries)
@@ -110,12 +113,15 @@ CREATE TABLE IF NOT EXISTS restock_orders (
   product_name VARCHAR(150) NOT NULL,
   quantity INT NOT NULL,
   supplier_name VARCHAR(150) NOT NULL,
+  supplier_id INT NULL,
   notes VARCHAR(255),
   status VARCHAR(20) NOT NULL DEFAULT 'Pending'
     CHECK (status IN ('Pending','Purchased','Confirmed','Cancelled')),
   received_quantity INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_restock_orders_supplier_id (supplier_id)
+  -- FK on supplier_id added at end of file (suppliers table is defined later)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Production job cards - standalone (not linked to purchase_orders, matching
@@ -213,3 +219,9 @@ CREATE TABLE IF NOT EXISTS attachments (
   uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Cross-table FKs added last, once all referenced tables exist.
+ALTER TABLE purchase_orders
+  ADD FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL;
+ALTER TABLE restock_orders
+  ADD FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;

@@ -19,10 +19,26 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($product === '' || $supplier === '' || $qty <= 0) {
             $error = 'Product name, supplier, and a positive quantity are required.';
         } else {
-            $stmt = $pdo->prepare(
-                'INSERT INTO restock_orders (product_name, quantity, supplier_name, notes) VALUES (?, ?, ?, ?)'
+            // Resolve or create the supplier master record (case-insensitive,
+            // trim-tolerant) so this restock order links to the canonical row.
+            $findSupplier = $pdo->prepare(
+                'SELECT id, name FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1'
             );
-            $stmt->execute([$product, $qty, $supplier, $notes !== '' ? $notes : null]);
+            $findSupplier->execute([$supplier]);
+            $existing = $findSupplier->fetch();
+            if ($existing) {
+                $supplierId = (int)$existing['id'];
+                $supplier = $existing['name'];
+            } else {
+                $createSupplier = $pdo->prepare('INSERT INTO suppliers (name) VALUES (?)');
+                $createSupplier->execute([$supplier]);
+                $supplierId = (int)$pdo->lastInsertId();
+            }
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO restock_orders (product_name, quantity, supplier_name, supplier_id, notes) VALUES (?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([$product, $qty, $supplier, $supplierId, $notes !== '' ? $notes : null]);
             setFlashMessage('Restock order created.');
             logActivity('create_restock', "Created restock order for \"$product\" (qty: $qty, supplier: $supplier).");
             header('Location: restock_orders.php');
@@ -122,7 +138,14 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $existingProducts = $canEdit ? $pdo->query('SELECT DISTINCT product_name FROM stock ORDER BY product_name')->fetchAll() : [];
 $existingSuppliers = $canEdit ? $pdo->query('SELECT name FROM suppliers ORDER BY name')->fetchAll() : [];
-$restockOrders = $pdo->query('SELECT * FROM restock_orders ORDER BY created_at DESC')->fetchAll();
+// Prefer the linked supplier's current name (renaming on the Suppliers page
+// flows through); fall back to the legacy free-text field for old rows.
+$restockOrders = $pdo->query(
+    'SELECT ro.*, COALESCE(s.name, ro.supplier_name) AS supplier_display
+     FROM restock_orders ro
+     LEFT JOIN suppliers s ON s.id = ro.supplier_id
+     ORDER BY ro.created_at DESC'
+)->fetchAll();
 $pageTitle = 'Restock Orders';
 include __DIR__ . '/includes/layout_start.php';
 ?>
@@ -138,16 +161,18 @@ include __DIR__ . '/includes/layout_start.php';
                 <?php endforeach; ?>
             </datalist>
             <input type="number" name="quantity" placeholder="Quantity to order" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-44">
-            <input type="text" name="supplier_name" list="restock-supplier-names" placeholder="Supplier name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <datalist id="restock-supplier-names">
-                <?php foreach ($existingSuppliers as $s): ?>
-                    <option value="<?= htmlspecialchars($s['name']) ?>"></option>
-                <?php endforeach; ?>
-            </datalist>
+            <input type="text" id="restock-supplier-input" name="supplier_name" placeholder="Supplier name" required autocomplete="off" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="text" name="notes" placeholder="Notes (optional)" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <button type="submit" name="create_restock" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Create Restock Order</button>
         </form>
     </div>
+    <script src="autocomplete.js"></script>
+    <script>
+        attachAutocomplete(
+            document.getElementById('restock-supplier-input'),
+            <?= json_encode(array_map(fn($s) => $s['name'], $existingSuppliers), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+        );
+    </script>
     <?php endif; ?>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
@@ -192,7 +217,7 @@ include __DIR__ . '/includes/layout_start.php';
                 <tr class="border-b border-slate-100 even:bg-slate-50 hover:bg-slate-100">
                     <td class="px-3 py-2"><?= htmlspecialchars($r['product_name']) ?></td>
                     <td class="px-3 py-2"><?= (int)$r['quantity'] ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($r['supplier_name']) ?></td>
+                    <td class="px-3 py-2"><?= htmlspecialchars($r['supplier_display']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($r['notes'] ?? '') ?></td>
                     <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold <?= $badgeClass ?>"><?= htmlspecialchars($r['status']) ?></span></td>
                     <td class="px-3 py-2"><?= $r['received_quantity'] !== null ? (int)$r['received_quantity'] : '-' ?></td>

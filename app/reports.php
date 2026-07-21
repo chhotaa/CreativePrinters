@@ -14,9 +14,14 @@ if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
 
     if ($report === 'sales') {
         $rows = $pdo->prepare(
-            "SELECT customer_name, COUNT(DISTINCT po_number) AS po_count, SUM(total_quantity) AS total_qty
-             FROM purchase_orders WHERE po_date BETWEEN ? AND ?
-             GROUP BY customer_name ORDER BY total_qty DESC"
+            "SELECT COALESCE(c.name, po.customer_name) AS customer_name,
+                    COUNT(DISTINCT po.po_number) AS po_count,
+                    SUM(po.total_quantity) AS total_qty
+             FROM purchase_orders po
+             LEFT JOIN customers c ON c.id = po.customer_id
+             WHERE po.po_date BETWEEN ? AND ?
+             GROUP BY COALESCE(po.customer_id, 0), COALESCE(c.name, po.customer_name)
+             ORDER BY total_qty DESC"
         );
         $rows->execute([$from, $to]);
         $data = array_map(fn($r) => [$r['customer_name'], (int)$r['po_count'], (int)$r['total_qty']], $rows->fetchAll());
@@ -34,9 +39,14 @@ if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
         exit;
     } elseif ($report === 'restock') {
         $rows = $pdo->prepare(
-            "SELECT supplier_name, COUNT(*) AS order_count, SUM(received_quantity) AS total_received
-             FROM restock_orders WHERE status = 'Confirmed' AND created_at BETWEEN ? AND ?
-             GROUP BY supplier_name ORDER BY total_received DESC"
+            "SELECT COALESCE(s.name, ro.supplier_name) AS supplier_name,
+                    COUNT(*) AS order_count,
+                    SUM(ro.received_quantity) AS total_received
+             FROM restock_orders ro
+             LEFT JOIN suppliers s ON s.id = ro.supplier_id
+             WHERE ro.status = 'Confirmed' AND ro.created_at BETWEEN ? AND ?
+             GROUP BY COALESCE(ro.supplier_id, 0), COALESCE(s.name, ro.supplier_name)
+             ORDER BY total_received DESC"
         );
         $rows->execute([$from, $to . ' 23:59:59']);
         $data = array_map(fn($r) => [$r['supplier_name'], (int)$r['order_count'], (int)$r['total_received']], $rows->fetchAll());
