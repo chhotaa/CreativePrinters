@@ -1,6 +1,28 @@
         </main>
     </div>
     <script>
+        // Mobile sidebar toggle: hamburger opens the off-canvas nav; the
+        // backdrop and any nav link close it. Desktop (md+) never runs this
+        // because the toggle/backdrop are hidden by Tailwind's md:hidden.
+        (function () {
+            var toggle = document.getElementById('navToggle');
+            var nav = document.getElementById('sideNav');
+            var backdrop = document.getElementById('navBackdrop');
+            if (!toggle || !nav || !backdrop) return;
+            function open() {
+                nav.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            }
+            function close() {
+                nav.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+            toggle.addEventListener('click', open);
+            backdrop.addEventListener('click', close);
+            nav.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', close); });
+        })();
+    </script>
+    <script>
         // Auto-wires up every <table id="..."> on the page with search +
         // "Show N entries" + Previous/Next, based on sibling controls named
         // by ID convention: {tableId}Search, {tableId}PageSize,
