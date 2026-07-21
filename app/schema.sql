@@ -11,7 +11,7 @@
 CREATE TABLE IF NOT EXISTS roles (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(50) NOT NULL UNIQUE,
-  is_system TINYINT(1) NOT NULL DEFAULT 0
+  is_system BOOLEAN NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- module_key is one of: stock, purchase_orders, deliveries,
@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS roles (
 CREATE TABLE IF NOT EXISTS role_permissions (
   role_id INT NOT NULL,
   module_key VARCHAR(50) NOT NULL,
-  access_level ENUM('none','view','edit') NOT NULL DEFAULT 'none',
+  access_level VARCHAR(20) NOT NULL DEFAULT 'none'
+    CHECK (access_level IN ('none','view','edit')),
   PRIMARY KEY (role_id, module_key),
   FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -88,12 +89,14 @@ CREATE TABLE IF NOT EXISTS deliveries (
   po_id INT NOT NULL,
   due_date DATE NOT NULL,
   quantity INT NOT NULL,
-  status ENUM('Pending','Shipped','Delivered') NOT NULL DEFAULT 'Pending',
+  status VARCHAR(20) NOT NULL DEFAULT 'Pending'
+    CHECK (status IN ('Pending','Shipped','Delivered')),
   dc_number VARCHAR(100) NULL,
   invoice_number VARCHAR(100) NULL,
   dc_date DATE NULL,
   bill_date DATE NULL,
-  reminder_sent ENUM('No','Yes') NOT NULL DEFAULT 'No',
+  reminder_sent VARCHAR(3) NOT NULL DEFAULT 'No'
+    CHECK (reminder_sent IN ('No','Yes')),
   FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -108,7 +111,8 @@ CREATE TABLE IF NOT EXISTS restock_orders (
   quantity INT NOT NULL,
   supplier_name VARCHAR(150) NOT NULL,
   notes VARCHAR(255),
-  status ENUM('Pending','Purchased','Confirmed','Cancelled') NOT NULL DEFAULT 'Pending',
+  status VARCHAR(20) NOT NULL DEFAULT 'Pending'
+    CHECK (status IN ('Pending','Purchased','Confirmed','Cancelled')),
   received_quantity INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -129,11 +133,14 @@ CREATE TABLE IF NOT EXISTS job_cards (
   copies VARCHAR(50),
   colour VARCHAR(255),
   lamination_varnish VARCHAR(150),
-  order_type ENUM('Sample','Bulk Production','Repeat Order') NOT NULL DEFAULT 'Bulk Production',
-  plate_type ENUM('New','Old') NOT NULL DEFAULT 'Old',
-  die_punching ENUM('New','Old') NULL,
-  pasting_perforation TINYINT(1) NOT NULL DEFAULT 0,
-  pasting_double_board TINYINT(1) NOT NULL DEFAULT 0,
+  order_type VARCHAR(20) NOT NULL DEFAULT 'Bulk Production'
+    CHECK (order_type IN ('Sample','Bulk Production','Repeat Order')),
+  plate_type VARCHAR(10) NOT NULL DEFAULT 'Old'
+    CHECK (plate_type IN ('New','Old')),
+  die_punching VARCHAR(10) NULL
+    CHECK (die_punching IS NULL OR die_punching IN ('New','Old')),
+  pasting_perforation BOOLEAN NOT NULL DEFAULT 0,
+  pasting_double_board BOOLEAN NOT NULL DEFAULT 0,
   details TEXT NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -195,7 +202,8 @@ CREATE TABLE IF NOT EXISTS suppliers (
 -- holds metadata, never a web-servable path.
 CREATE TABLE IF NOT EXISTS attachments (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  record_type ENUM('delivery','job_card') NOT NULL,
+  record_type VARCHAR(20) NOT NULL
+    CHECK (record_type IN ('delivery','job_card')),
   record_id INT NOT NULL,
   original_filename VARCHAR(255) NOT NULL,
   stored_filename VARCHAR(255) NOT NULL,
