@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/flash.php';
 require_once __DIR__ . '/includes/activity_log.php';
 requirePermission('customers', 'view');
 $canEdit = hasPermission('customers', 'edit');
+$isSuperAdmin = (currentUser()['role_name'] ?? '') === 'Super Admin';
 
 $message = '';
 $error = '';
@@ -41,6 +42,28 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
         }
+    } elseif (isset($_POST['sync_po_links'])) {
+        if (!$isSuperAdmin) {
+            http_response_code(403);
+            die('Only Super Admin can run the customer link sync.');
+        }
+        // Re-run the same case-insensitive backfill the linking migration
+        // did originally. Useful when a customer has been added AFTER their
+        // POs already existed as free-text.
+        $stmt = $pdo->prepare(
+            'UPDATE purchase_orders po
+             JOIN customers c ON LOWER(TRIM(c.name)) = LOWER(TRIM(po.customer_name))
+             SET po.customer_id = c.id
+             WHERE po.customer_id IS NULL'
+        );
+        $stmt->execute();
+        $linked = $stmt->rowCount();
+        setFlashMessage($linked === 0
+            ? 'No orphan POs matched an existing customer.'
+            : "Linked $linked orphan PO row" . ($linked === 1 ? '' : 's') . ' to existing customers.');
+        logActivity('sync_customer_po_links', "Ran PO customer-link sync. Linked $linked row" . ($linked === 1 ? '' : 's') . '.');
+        header('Location: customers.php');
+        exit;
     } elseif (isset($_POST['delete_customer'])) {
         $id = (int)$_POST['customer_id'];
         $nameStmt = $pdo->prepare('SELECT name FROM customers WHERE id = ?');
@@ -63,9 +86,32 @@ if ($canEdit && isset($_GET['edit'])) {
 }
 
 $customers = $pdo->query('SELECT * FROM customers ORDER BY name')->fetchAll();
+
+// How many POs remain unlinked AND have a customer_name that matches an
+// existing customer master (case-insensitively). These are what the sync
+// button would resolve. If zero, don't show the card at all.
+$orphanLinkable = (int)$pdo->query(
+    'SELECT COUNT(*) FROM purchase_orders po
+     JOIN customers c ON LOWER(TRIM(c.name)) = LOWER(TRIM(po.customer_name))
+     WHERE po.customer_id IS NULL'
+)->fetchColumn();
+
 $pageTitle = 'Customers';
 include __DIR__ . '/includes/layout_start.php';
 ?>
+    <?php if ($isSuperAdmin && $orphanLinkable > 0): ?>
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div class="text-sm text-amber-900">
+            <span class="font-semibold"><?= $orphanLinkable ?></span>
+            unlinked purchase order row<?= $orphanLinkable === 1 ? '' : 's' ?>
+            match an existing customer by name. Sync to link them now — reports and lookups will start including them.
+        </div>
+        <form method="POST" style="margin:0;">
+            <button type="submit" name="sync_po_links" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors cursor-pointer">Sync links</button>
+        </form>
+    </div>
+    <?php endif; ?>
+
     <?php if ($canEdit): ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= $editCustomer ? 'Edit Customer' : 'Add Customer' ?></h3>
