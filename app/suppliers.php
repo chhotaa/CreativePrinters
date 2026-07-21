@@ -160,7 +160,7 @@ include __DIR__ . '/includes/layout_start.php';
             <tbody>
             <?php foreach ($suppliers as $s): ?>
                 <tr class="border-b border-slate-100 even:bg-slate-50 hover:bg-slate-100">
-                    <td class="px-3 py-2"><?= htmlspecialchars($s['name']) ?></td>
+                    <td class="px-3 py-2"><a href="supplier_detail.php?id=<?= (int)$s['id'] ?>" class="text-brand-green hover:underline font-medium"><?= htmlspecialchars($s['name']) ?></a></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($s['contact_person'] ?? '') ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($s['phone'] ?? '') ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($s['email'] ?? '') ?></td>

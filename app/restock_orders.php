@@ -237,7 +237,13 @@ include __DIR__ . '/includes/layout_start.php';
                 <tr class="border-b border-slate-100 even:bg-slate-50 hover:bg-slate-100">
                     <td class="px-3 py-2"><?= htmlspecialchars($r['product_name']) ?></td>
                     <td class="px-3 py-2"><?= (int)$r['quantity'] ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($r['supplier_display']) ?></td>
+                    <td class="px-3 py-2">
+                        <?php if (!empty($r['supplier_id'])): ?>
+                            <a href="supplier_detail.php?id=<?= (int)$r['supplier_id'] ?>" class="text-brand-green hover:underline"><?= htmlspecialchars($r['supplier_display']) ?></a>
+                        <?php else: ?>
+                            <?= htmlspecialchars($r['supplier_display']) ?>
+                        <?php endif; ?>
+                    </td>
                     <td class="px-3 py-2"><?= htmlspecialchars($r['notes'] ?? '') ?></td>
                     <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold <?= $badgeClass ?>"><?= htmlspecialchars($r['status']) ?></span></td>
                     <td class="px-3 py-2"><?= $r['received_quantity'] !== null ? (int)$r['received_quantity'] : '-' ?></td>

@@ -231,7 +231,13 @@ include __DIR__ . '/includes/layout_start.php';
                 <tr class="border-b border-slate-100 even:bg-slate-50 hover:bg-slate-100">
                     <td class="px-3 py-2"><?= htmlspecialchars($po['po_number']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['po_date']) ?></td>
-                    <td class="px-3 py-2"><?= htmlspecialchars($po['customer_display']) ?></td>
+                    <td class="px-3 py-2">
+                        <?php if (!empty($po['customer_id'])): ?>
+                            <a href="customer_detail.php?id=<?= (int)$po['customer_id'] ?>" class="text-brand-green hover:underline"><?= htmlspecialchars($po['customer_display']) ?></a>
+                        <?php else: ?>
+                            <?= htmlspecialchars($po['customer_display']) ?>
+                        <?php endif; ?>
+                    </td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['item_code']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['description']) ?></td>
                     <td class="px-3 py-2"><?= $po['total_quantity'] ?></td>
