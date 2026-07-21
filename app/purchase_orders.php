@@ -9,6 +9,34 @@ $canEdit = hasPermission('purchase_orders', 'edit');
 $message = '';
 $error = '';
 
+if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_po'])) {
+    $id = (int)$_POST['po_id'];
+
+    // Refuse to delete if this PO row has ANY linked deliveries, in any
+    // status — Pending / Shipped / Delivered. The deliveries FK cascades,
+    // so without this check a delete would silently take those out too.
+    $delCount = $pdo->prepare('SELECT COUNT(*) FROM deliveries WHERE po_id = ?');
+    $delCount->execute([$id]);
+    $linkedDeliveries = (int)$delCount->fetchColumn();
+
+    if ($linkedDeliveries > 0) {
+        setFlashError("Can't delete this PO row — it has $linkedDeliveries linked delivery" . ($linkedDeliveries === 1 ? '' : ' entries') . '. Remove the deliveries first on the Delivery Schedule page.');
+    } else {
+        $info = $pdo->prepare('SELECT po_number, item_code FROM purchase_orders WHERE id = ?');
+        $info->execute([$id]);
+        $row = $info->fetch();
+        if ($row) {
+            $del = $pdo->prepare('DELETE FROM purchase_orders WHERE id = ?');
+            $del->execute([$id]);
+            $label = $row['po_number'] . ($row['item_code'] !== '' ? ' / ' . $row['item_code'] : '');
+            setFlashMessage("Deleted PO row $label.");
+            logActivity('delete_purchase_order', "Deleted PO row $label.");
+        }
+    }
+    header('Location: purchase_orders.php');
+    exit;
+}
+
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
     $poNumber = trim($_POST['po_number'] ?? '');
     $poDate = $_POST['po_date'] ?: null;
@@ -112,7 +140,9 @@ $existingCustomers = $pdo->query('SELECT name FROM customers ORDER BY name')->fe
 // page flows through to every PO); fall back to the legacy free-text field
 // for rows that pre-date the customer-linking migration.
 $pos = $pdo->query(
-    'SELECT po.*, COALESCE(c.name, po.customer_name) AS customer_display
+    'SELECT po.*,
+            COALESCE(c.name, po.customer_name) AS customer_display,
+            (SELECT COUNT(*) FROM deliveries d WHERE d.po_id = po.id) AS delivery_count
      FROM purchase_orders po
      LEFT JOIN customers c ON c.id = po.customer_id
      ORDER BY po.po_date DESC, po.id DESC'
@@ -192,7 +222,8 @@ include __DIR__ . '/includes/layout_start.php';
                     <th class="text-left px-3 py-2 font-semibold">Customer</th>
                     <th class="text-left px-3 py-2 font-semibold">Item Code</th>
                     <th class="text-left px-3 py-2 font-semibold">Description</th>
-                    <th class="text-left px-3 py-2 font-semibold rounded-tr-md">Total Qty</th>
+                    <th class="text-left px-3 py-2 font-semibold <?= $canEdit ? '' : 'rounded-tr-md' ?>">Total Qty</th>
+                    <?php if ($canEdit): ?><th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -204,6 +235,19 @@ include __DIR__ . '/includes/layout_start.php';
                     <td class="px-3 py-2"><?= htmlspecialchars($po['item_code']) ?></td>
                     <td class="px-3 py-2"><?= htmlspecialchars($po['description']) ?></td>
                     <td class="px-3 py-2"><?= $po['total_quantity'] ?></td>
+                    <?php if ($canEdit): ?>
+                    <td class="px-3 py-2 whitespace-nowrap">
+                        <?php $deliveryCount = (int)$po['delivery_count']; ?>
+                        <?php if ($deliveryCount > 0): ?>
+                            <button type="button" disabled title="This PO row has <?= $deliveryCount ?> linked delivery entr<?= $deliveryCount === 1 ? 'y' : 'ies' ?>. Remove them first on the Delivery Schedule page." class="px-3 py-1.5 rounded-md bg-slate-200 text-slate-400 text-xs font-semibold cursor-not-allowed">Delete</button>
+                        <?php else: ?>
+                            <form method="POST" onsubmit="return confirm('Delete this PO row? This cannot be undone.');" style="margin:0;">
+                                <input type="hidden" name="po_id" value="<?= (int)$po['id'] ?>">
+                                <button type="submit" name="delete_po" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
+                            </form>
+                        <?php endif; ?>
+                    </td>
+                    <?php endif; ?>
                 </tr>
             <?php endforeach; ?>
             </tbody>
