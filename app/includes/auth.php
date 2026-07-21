@@ -3,6 +3,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/csrf.php';
+
 function requireLogin() {
     if (!isset($_SESSION['user_id'])) {
         header('Location: /app/login.php');

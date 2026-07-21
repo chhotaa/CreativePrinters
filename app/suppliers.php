@@ -11,6 +11,7 @@ $message = '';
 $error = '';
 
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
     if (isset($_POST['add_supplier']) || isset($_POST['update_supplier'])) {
         $id = isset($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : null;
         $name = trim($_POST['name'] ?? '');
@@ -106,6 +107,7 @@ include __DIR__ . '/includes/layout_start.php';
             match an existing supplier by name. Sync to link them now — reports and lookups will start including them.
         </div>
         <form method="POST" style="margin:0;">
+                <?= csrfField() ?>
             <button type="submit" name="sync_restock_links" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors cursor-pointer">Sync links</button>
         </form>
     </div>
@@ -115,6 +117,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= $editSupplier ? 'Edit Supplier' : 'Add Supplier' ?></h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center">
+                <?= csrfField() ?>
             <?php if ($editSupplier): ?>
                 <input type="hidden" name="supplier_id" value="<?= $editSupplier['id'] ?>">
             <?php endif; ?>
@@ -169,6 +172,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <td class="px-3 py-2 whitespace-nowrap">
                         <a href="?edit=<?= $s['id'] ?>" class="px-3 py-1.5 rounded-md bg-brand-dark text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Edit</a>
                         <form method="POST" onsubmit="return confirm('Delete this supplier?');" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                             <input type="hidden" name="supplier_id" value="<?= $s['id'] ?>">
                             <button type="submit" name="delete_supplier" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                         </form>

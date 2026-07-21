@@ -28,6 +28,7 @@ $modules = [
 $accessLevels = ['none' => 'None', 'view' => 'View', 'edit' => 'Edit'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
     if (isset($_POST['create_role'])) {
         $name = trim($_POST['role_name'] ?? '');
         if ($name === '') {
@@ -117,6 +118,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add New Role</h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center">
+                <?= csrfField() ?>
             <input type="text" name="role_name" placeholder="e.g. Production Manager" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <button type="submit" name="create_role" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Add Role</button>
         </form>
@@ -126,7 +128,8 @@ include __DIR__ . '/includes/layout_start.php';
     <p class="text-sm text-slate-500 mb-4">"Super Admin" always has full access everywhere and isn't shown here. Each role's column saves independently — changing one role does not affect the others.</p>
 
     <?php foreach ($roles as $role): ?>
-        <form method="POST" id="role-form-<?= $role['id'] ?>">
+        <form method="POST" id="role-form-<?= $role['id'] ?>
+                <?= csrfField() ?>">
             <input type="hidden" name="role_id" value="<?= $role['id'] ?>">
         </form>
     <?php endforeach; ?>

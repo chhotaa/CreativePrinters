@@ -11,6 +11,7 @@ $message = '';
 $error = '';
 
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
     if (isset($_POST['save_stock'])) {
         $product = trim($_POST['product_name']);
         $qty = (int)$_POST['quantity'];
@@ -103,6 +104,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add / Update Stock</h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center">
+                <?= csrfField() ?>
             <input type="text" name="product_name" placeholder="Product name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="number" name="quantity" placeholder="Quantity" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-36">
             <input type="number" name="reorder_level" placeholder="Reorder level" value="0" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-40">
@@ -150,6 +152,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <?php if ($canEdit): ?>
                     <td class="px-3 py-2">
                         <form method="POST" onsubmit="return confirm('Delete this stock item?');" style="margin:0;">
+                <?= csrfField() ?>
                             <input type="hidden" name="stock_id" value="<?= $s['id'] ?>">
                             <button type="submit" name="delete_stock" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                         </form>

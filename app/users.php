@@ -11,6 +11,7 @@ $error = '';
 $superAdminRoleId = (int)$pdo->query("SELECT id FROM roles WHERE name = 'Super Admin'")->fetchColumn();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
     if (isset($_POST['add_user'])) {
         $username = trim($_POST['username']);
         $password = $_POST['password'];
@@ -105,6 +106,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= $editUser ? 'Edit User' : 'Add User' ?></h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center">
+                <?= csrfField() ?>
             <?php if ($editUser): ?>
                 <input type="hidden" name="user_id" value="<?= $editUser['id'] ?>">
             <?php endif; ?>
@@ -161,6 +163,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <td class="px-3 py-2 whitespace-nowrap">
                         <a href="?edit=<?= $u['id'] ?>" class="px-3 py-1.5 rounded-md bg-brand-dark text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Edit</a>
                         <form method="POST" onsubmit="return confirm('Delete this user?');" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                             <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
                             <button type="submit" name="delete_user" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                         </form>

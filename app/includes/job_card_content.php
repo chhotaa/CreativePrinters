@@ -8,6 +8,7 @@
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= $jc ? 'Edit Job Card #' . str_pad((string)$jc['id'], 2, '0', STR_PAD_LEFT) : 'New Job Card' ?></h3>
         <form method="POST" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <?= csrfField() ?>
             <?php if ($jc): ?>
                 <input type="hidden" name="job_card_id" value="<?= $jc['id'] ?>">
             <?php endif; ?>
@@ -144,6 +145,7 @@
                         <?php if ($canEdit): ?>
                             <a href="?edit=<?= $row['id'] ?>" class="px-3 py-1.5 rounded-md bg-slate-600 text-white text-xs font-semibold hover:bg-slate-700 transition-colors inline-block">Edit</a>
                             <form method="POST" onsubmit="return confirm('Delete this job card?');" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                                 <input type="hidden" name="job_card_id" value="<?= $row['id'] ?>">
                                 <button type="submit" name="delete_job_card" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                             </form>
@@ -168,6 +170,7 @@
             <h3 class="text-lg font-semibold text-brand-dark mb-3">Attachments</h3>
             <div id="attachmentsList" class="space-y-2 mb-4"></div>
             <form method="POST" enctype="multipart/form-data" class="flex flex-wrap gap-2 items-center mb-3">
+                <?= csrfField() ?>
                 <input type="hidden" name="job_card_id" id="attachmentsJobCardId">
                 <input type="file" name="attachment" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf" required class="text-sm flex-1 min-w-[180px]">
                 <button type="submit" name="upload_attachment" value="1" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Upload</button>
@@ -196,7 +199,7 @@
             } else {
                 list.innerHTML = items.map(function (a) {
                     var deleteBtn = jobCardAttachmentsCanEdit
-                        ? '<form method="POST" onsubmit="return confirm(\'Delete this attachment?\');" style="display:inline;margin:0;"><input type="hidden" name="attachment_id" value="' + a.id + '"><input type="hidden" name="job_card_id" value="' + jobCardId + '"><button type="submit" name="delete_attachment" value="1" class="text-red-600 text-xs font-semibold hover:text-red-700 cursor-pointer">Delete</button></form>'
+                        ? '<form method="POST" onsubmit="return confirm(\'Delete this attachment?\');" style="display:inline;margin:0;"><?= csrfField() ?><input type="hidden" name="attachment_id" value="' + a.id + '"><input type="hidden" name="job_card_id" value="' + jobCardId + '"><button type="submit" name="delete_attachment" value="1" class="text-red-600 text-xs font-semibold hover:text-red-700 cursor-pointer">Delete</button></form>'
                         : '';
                     return '<div class="flex items-center justify-between gap-2 border border-slate-200 rounded-md px-3 py-2 text-sm">' +
                         '<a href="download_attachment.php?id=' + a.id + '" target="_blank" class="text-brand-dark hover:text-brand-green truncate">' + a.name.replace(/</g, '&lt;') + '</a>' +

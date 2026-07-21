@@ -10,6 +10,7 @@ include __DIR__ . '/includes/layout_start.php';
 ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5 max-w-md mx-auto">
         <form method="POST" class="space-y-3">
+                <?= csrfField() ?>
             <input type="password" name="current_password" placeholder="Current password" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="password" name="new_password" placeholder="New password (min. 6 characters)" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="password" name="confirm_password" placeholder="Confirm new password" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">

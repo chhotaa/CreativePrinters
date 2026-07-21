@@ -10,6 +10,7 @@ $message = '';
 $error = '';
 
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_po'])) {
+    verifyCsrf();
     $id = (int)$_POST['po_id'];
 
     // Refuse to delete if this PO row has ANY linked deliveries, in any
@@ -38,6 +39,7 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_po
 }
 
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])) {
+    verifyCsrf();
     $poNumber = trim($_POST['po_number'] ?? '');
     $poDate = $_POST['po_date'] ?: null;
     $customer = trim($_POST['customer_name'] ?? '');
@@ -155,6 +157,7 @@ include __DIR__ . '/includes/layout_start.php';
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add Purchase Order</h3>
         <p class="text-sm text-slate-500 mb-3">Enter the PO number and customer once, then add as many item rows as this PO covers in a single save.</p>
         <form method="POST" id="poForm">
+                <?= csrfField() ?>
             <div class="flex flex-wrap gap-2 items-center mb-4">
                 <input type="text" name="po_number" placeholder="PO Number (e.g. HT64023370)" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
                 <input type="date" name="po_date" title="PO Date" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
@@ -248,6 +251,7 @@ include __DIR__ . '/includes/layout_start.php';
                             <button type="button" disabled title="This PO row has <?= $deliveryCount ?> linked delivery entr<?= $deliveryCount === 1 ? 'y' : 'ies' ?>. Remove them first on the Delivery Schedule page." class="px-3 py-1.5 rounded-md bg-slate-200 text-slate-400 text-xs font-semibold cursor-not-allowed">Delete</button>
                         <?php else: ?>
                             <form method="POST" onsubmit="return confirm('Delete this PO row? This cannot be undone.');" style="margin:0;">
+                <?= csrfField() ?>
                                 <input type="hidden" name="po_id" value="<?= (int)$po['id'] ?>">
                                 <button type="submit" name="delete_po" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                             </form>

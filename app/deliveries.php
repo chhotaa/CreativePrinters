@@ -10,6 +10,7 @@ $message = '';
 $error = '';
 
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
     if (isset($_POST['add_delivery'])) {
         $poId = (int)$_POST['po_id'];
         $dueDate = $_POST['due_date'];
@@ -190,6 +191,7 @@ include __DIR__ . '/includes/layout_start.php';
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Add Delivery Due Date</h3>
         <form method="POST" class="flex flex-wrap gap-2 items-center" id="addDeliveryForm">
+                <?= csrfField() ?>
             <div class="relative po-search-wrap min-w-[260px]">
                 <input type="text" id="poSearchInput" placeholder="Select PO Number" autocomplete="off" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
                 <input type="hidden" name="po_id" id="poIdInput">
@@ -356,6 +358,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <?php if ($canEdit): ?>
                     <td class="px-3 py-2">
                         <form method="POST" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                             <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                             <select name="status" onchange="handleStatusChange(this)" data-delivery-id="<?= $d['id'] ?>" data-current-status="<?= htmlspecialchars($d['status']) ?>" <?= $d['status'] === 'Delivered' ? 'disabled title="Delivered deliveries cannot be changed"' : '' ?> class="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
                                 <option value="Pending" <?= $d['status'] === 'Pending' ? 'selected' : '' ?>>Pending</option>
@@ -376,6 +379,7 @@ include __DIR__ . '/includes/layout_start.php';
                         <?php endif; ?>
                         <?php if ($canEdit): ?>
                         <form method="POST" onsubmit="return confirm('Delete this delivery date?');" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                             <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                             <button type="submit" name="delete_delivery" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Delete</button>
                         </form>
@@ -439,6 +443,7 @@ include __DIR__ . '/includes/layout_start.php';
                 <div class="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
                     <?php if ($canEdit): ?>
                     <form method="POST" style="margin:0;" class="flex-1">
+                <?= csrfField() ?>
                         <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                         <select name="status" onchange="handleStatusChange(this)" data-delivery-id="<?= $d['id'] ?>" data-current-status="<?= htmlspecialchars($d['status']) ?>" <?= $d['status'] === 'Delivered' ? 'disabled title="Delivered deliveries cannot be changed"' : '' ?> class="w-full px-3 py-2.5 md:px-2 md:py-1 border border-slate-300 rounded-md text-sm md:text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
                             <option value="Pending" <?= $d['status'] === 'Pending' ? 'selected' : '' ?>>Pending</option>
@@ -455,6 +460,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <?php endif; ?>
                     <?php if ($canEdit): ?>
                     <form method="POST" onsubmit="return confirm('Delete this delivery date?');" style="margin:0;">
+                <?= csrfField() ?>
                         <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                         <button type="submit" name="delete_delivery" value="1" title="Delete" class="inline-flex items-center justify-center w-10 h-10 md:w-7 md:h-7 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M6 2a1 1 0 00-1 1v1H3a1 1 0 000 2h14a1 1 0 100-2h-2V3a1 1 0 00-1-1H6zm2 6a1 1 0 011 1v6a1 1 0 11-2 0V9a1 1 0 011-1zm4 0a1 1 0 011 1v6a1 1 0 11-2 0V9a1 1 0 011-1z"/></svg>
@@ -514,6 +520,7 @@ include __DIR__ . '/includes/layout_start.php';
             <h3 class="text-lg font-semibold text-brand-dark mb-3">Delivery Details</h3>
             <p class="text-sm text-slate-500 mb-3">Enter these details to mark the delivery as Delivered.</p>
             <form method="POST" id="deliveryDetailsForm">
+                <?= csrfField() ?>
                 <input type="hidden" name="delivery_id" id="deliveryDetailsId">
                 <input type="hidden" name="status" value="Delivered">
                 <input type="hidden" name="update_status" value="1">

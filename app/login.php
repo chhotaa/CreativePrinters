@@ -31,6 +31,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         recordLoginAttempt($pdo, $username, $success);
 
         if ($success) {
+            // Regenerate session ID + CSRF token on login so anything
+            // leaked from the pre-auth session can't ride into the
+            // authenticated one (session fixation + CSRF re-use).
+            session_regenerate_id(true);
+            rotateCsrfToken();
             $_SESSION['user_id'] = $user['id'];
             logActivity('login_success', 'Logged in.');
             redirectToDashboard();

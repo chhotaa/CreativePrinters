@@ -11,6 +11,7 @@ $message = '';
 $error = '';
 
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
     if (isset($_POST['create_restock'])) {
         $product = trim($_POST['product_name']);
         $qty = (int)$_POST['quantity'];
@@ -174,6 +175,7 @@ include __DIR__ . '/includes/layout_start.php';
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Create Restock Order</h3>
         <p class="text-sm text-slate-500 mb-3">This is for buying stock for our own inventory (not a customer Purchase Order). Once created, mark it Purchased after buying it, then confirm here to add it into Stock.</p>
         <form method="POST" class="flex flex-wrap gap-2 items-center">
+                <?= csrfField() ?>
             <input type="text" name="product_name" list="stock-products" placeholder="Product name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <datalist id="stock-products">
                 <?php foreach ($existingProducts as $p): ?>
@@ -252,20 +254,24 @@ include __DIR__ . '/includes/layout_start.php';
                     <td class="px-3 py-2 whitespace-nowrap">
                         <?php if ($r['status'] === 'Pending'): ?>
                             <form method="POST" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                                 <input type="hidden" name="restock_id" value="<?= $r['id'] ?>">
                                 <button type="submit" name="mark_purchased" value="1" class="px-3 py-1.5 rounded-md bg-brand-green text-white text-xs font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Mark Purchased</button>
                             </form>
                             <form method="POST" onsubmit="return confirm('Cancel this restock order?');" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                                 <input type="hidden" name="restock_id" value="<?= $r['id'] ?>">
                                 <button type="submit" name="cancel_restock" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Cancel</button>
                             </form>
                         <?php elseif ($r['status'] === 'Purchased'): ?>
                             <form method="POST" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                                 <input type="hidden" name="restock_id" value="<?= $r['id'] ?>">
                                 <input type="number" name="received_quantity" value="<?= (int)$r['quantity'] ?>" min="0" class="w-20 px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
                                 <button type="submit" name="confirm_restock" value="1" class="px-3 py-1.5 rounded-md bg-brand-green text-white text-xs font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Confirm</button>
                             </form>
                             <form method="POST" onsubmit="return confirm('Reject this back to Pending?');" style="display:inline-block; margin:0;">
+                <?= csrfField() ?>
                                 <input type="hidden" name="restock_id" value="<?= $r['id'] ?>">
                                 <button type="submit" name="reject_restock" value="1" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors cursor-pointer">Reject</button>
                             </form>

@@ -11,6 +11,7 @@ $allowedPlateTypes = ['New', 'Old'];
 $allowedDiePunching = ['New', 'Old'];
 
 if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
     if (isset($_POST['add_job_card'])) {
         $jobDate = $_POST['job_date'] ?: date('Y-m-d');
         $productName = trim($_POST['product_name'] ?? '');
@@ -138,6 +139,7 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // users can attach reference files even though they can't create/edit/delete
 // the job card itself.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_attachment'])) {
+    verifyCsrf();
     $id = (int)$_POST['job_card_id'];
     $uploadError = saveAttachment('job_card', $id, $_FILES['attachment'] ?? []);
     if ($uploadError) {
