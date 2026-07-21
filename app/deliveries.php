@@ -138,6 +138,41 @@ foreach ($deliveries as $d) {
     $deliveryGroups[$key]['rows'][] = $d;
 }
 
+// Bucket deliveries into time windows (for the Cards view) and status
+// columns (for the Kanban view). Rows still carry all their filter data
+// so the same JS filter logic works across views.
+$todayObj = new DateTime('today');
+$cardBuckets = [
+    'overdue' => ['label' => 'Overdue', 'accent' => 'red', 'rows' => []],
+    'this_week' => ['label' => 'Due this week', 'accent' => 'amber', 'rows' => []],
+    'next_two_weeks' => ['label' => 'Due in next 2 weeks', 'accent' => 'blue', 'rows' => []],
+    'later' => ['label' => 'Later', 'accent' => 'slate', 'rows' => []],
+    'delivered' => ['label' => 'Delivered', 'accent' => 'green', 'rows' => []],
+];
+$kanbanBuckets = [
+    'Pending' => ['label' => 'Pending', 'accent' => 'amber', 'rows' => []],
+    'Shipped' => ['label' => 'Shipped', 'accent' => 'blue', 'rows' => []],
+    'Delivered' => ['label' => 'Delivered', 'accent' => 'green', 'rows' => []],
+];
+foreach ($deliveries as $d) {
+    $due = new DateTime($d['due_date']);
+    $daysUntil = (int)$todayObj->diff($due)->format('%r%a');
+    if ($d['status'] === 'Delivered') {
+        $cardBuckets['delivered']['rows'][] = $d;
+    } elseif ($daysUntil < 0) {
+        $cardBuckets['overdue']['rows'][] = $d;
+    } elseif ($daysUntil <= 7) {
+        $cardBuckets['this_week']['rows'][] = $d;
+    } elseif ($daysUntil <= 14) {
+        $cardBuckets['next_two_weeks']['rows'][] = $d;
+    } else {
+        $cardBuckets['later']['rows'][] = $d;
+    }
+    if (isset($kanbanBuckets[$d['status']])) {
+        $kanbanBuckets[$d['status']]['rows'][] = $d;
+    }
+}
+
 $pageTitle = 'Delivery Schedule';
 include __DIR__ . '/includes/layout_start.php';
 ?>
@@ -215,6 +250,14 @@ include __DIR__ . '/includes/layout_start.php';
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div id="viewModeSwitcher" class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
+                <button type="button" data-view="table" class="view-tab active px-3 py-1.5 font-semibold text-white bg-brand-green">Table</button>
+                <button type="button" data-view="cards" class="view-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Cards</button>
+                <button type="button" data-view="kanban" class="view-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Kanban</button>
+            </div>
+            <input type="text" id="deliverySearch" placeholder="Search PO, customer, item..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div class="flex flex-wrap items-center gap-2">
                 <div id="deliveryFilterTabs" class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
                     <button type="button" data-filter="all" class="filter-tab active px-3 py-1.5 font-semibold text-white bg-brand-dark">All</button>
@@ -227,8 +270,8 @@ include __DIR__ . '/includes/layout_start.php';
                     Include archive (delivered 30+ days ago)
                 </label>
             </div>
-            <input type="text" id="deliverySearch" placeholder="Search PO, customer, item..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
         </div>
+        <div id="tableView">
         <div class="overflow-x-auto max-h-[65vh] overflow-y-auto border border-slate-100 rounded-md">
         <table class="w-full text-sm border-collapse">
             <thead class="sticky top-0 z-10">
@@ -339,6 +382,105 @@ include __DIR__ . '/includes/layout_start.php';
                 </div>
             </div>
         </div>
+        </div>
+
+        <?php
+        // Shared renderer for a delivery card used by both the Cards view
+        // (grouped by time window) and the Kanban view (grouped by status).
+        $renderDeliveryCard = function ($d, $accent) use ($canEdit, $deliveryStatusBadge, $todayObj) {
+            $due = new DateTime($d['due_date']);
+            $diff = (int)$todayObj->diff($due)->format('%r%a');
+            $accentBorder = 'border-l-4 border-l-' . $accent . '-400';
+            $badgeClass = $deliveryStatusBadge[$d['status']] ?? 'bg-slate-100 text-slate-700';
+            $searchable = htmlspecialchars(strtolower($d['po_number'] . ' ' . $d['customer_name'] . ' ' . $d['item_code'] . ' ' . $d['description']));
+            $daysSinceDelivered = '';
+            if ($d['status'] === 'Delivered' && !empty($d['bill_date'])) {
+                $bill = new DateTime($d['bill_date']);
+                $daysSinceDelivered = (int)$bill->diff($todayObj)->format('%r%a');
+            }
+            ob_start(); ?>
+            <div class="delivery-card bg-white ring-1 ring-slate-200 <?= $accentBorder ?> rounded-md p-3 mb-2 hover:shadow-sm transition-shadow" data-status="<?= htmlspecialchars($d['status']) ?>" data-search="<?= $searchable ?>" data-days-since-delivered="<?= $daysSinceDelivered ?>">
+                <div class="flex items-start justify-between gap-2 mb-1">
+                    <div class="text-sm font-semibold text-brand-dark truncate"><?= htmlspecialchars($d['po_number']) ?></div>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 <?= $badgeClass ?>"><?= htmlspecialchars($d['status']) ?></span>
+                </div>
+                <div class="text-xs text-slate-600 mb-1 truncate"><?= htmlspecialchars($d['customer_name']) ?></div>
+                <div class="text-xs text-slate-500 mb-2 truncate"><?= htmlspecialchars($d['item_code']) ?> — <?= htmlspecialchars($d['description']) ?></div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-700"><span class="text-slate-400">Due</span> <?= htmlspecialchars($d['due_date']) ?></span>
+                    <span class="text-slate-700"><span class="text-slate-400">Qty</span> <?= $d['quantity'] ?></span>
+                </div>
+                <?php if ($canEdit || ($d['status'] === 'Delivered' && $d['dc_number'])): ?>
+                <div class="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                    <?php if ($canEdit): ?>
+                    <form method="POST" style="margin:0;" class="flex-1">
+                        <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
+                        <select name="status" onchange="handleStatusChange(this)" data-delivery-id="<?= $d['id'] ?>" data-current-status="<?= htmlspecialchars($d['status']) ?>" <?= $d['status'] === 'Delivered' ? 'disabled title="Delivered deliveries cannot be changed"' : '' ?> class="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                            <option value="Pending" <?= $d['status'] === 'Pending' ? 'selected' : '' ?>>Pending</option>
+                            <option value="Shipped" <?= $d['status'] === 'Shipped' ? 'selected' : '' ?>>Shipped</option>
+                            <option value="Delivered" <?= $d['status'] === 'Delivered' ? 'selected' : '' ?>>Delivered</option>
+                        </select>
+                        <input type="hidden" name="update_status" value="1">
+                    </form>
+                    <?php endif; ?>
+                    <?php if ($d['status'] === 'Delivered' && $d['dc_number']): ?>
+                        <button type="button" onclick="viewDeliveryDetails(<?= $d['id'] ?>)" title="View delivery details" class="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10 3.5c-4.14 0-7.5 3.5-8.5 6.5 1 3 4.36 6.5 8.5 6.5s7.5-3.5 8.5-6.5c-1-3-4.36-6.5-8.5-6.5zm0 11a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/><circle cx="10" cy="10" r="2"/></svg>
+                        </button>
+                    <?php endif; ?>
+                    <?php if ($canEdit): ?>
+                    <form method="POST" onsubmit="return confirm('Delete this delivery date?');" style="margin:0;">
+                        <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
+                        <button type="submit" name="delete_delivery" value="1" title="Delete" class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M6 2a1 1 0 00-1 1v1H3a1 1 0 000 2h14a1 1 0 100-2h-2V3a1 1 0 00-1-1H6zm2 6a1 1 0 011 1v6a1 1 0 11-2 0V9a1 1 0 011-1zm4 0a1 1 0 011 1v6a1 1 0 11-2 0V9a1 1 0 011-1z"/></svg>
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php return ob_get_clean();
+        };
+        ?>
+
+        <div id="cardsView" class="hidden">
+            <?php foreach ($cardBuckets as $bucketKey => $bucket): ?>
+                <div class="delivery-bucket mb-5" data-bucket="<?= $bucketKey ?>">
+                    <h3 class="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2 cursor-pointer select-none" onclick="toggleBucket('<?= $bucketKey ?>')">
+                        <span class="bucket-chevron transition-transform inline-block w-3 text-slate-500">▾</span>
+                        <span class="inline-block w-2 h-2 rounded-full bg-<?= $bucket['accent'] ?>-500"></span>
+                        <?= htmlspecialchars($bucket['label']) ?>
+                        <span class="text-xs font-normal text-slate-400 bucket-count"></span>
+                    </h3>
+                    <div class="bucket-body">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            <?php foreach ($bucket['rows'] as $d): echo $renderDeliveryCard($d, $bucket['accent']); endforeach; ?>
+                        </div>
+                        <div class="empty-bucket-msg hidden text-xs text-slate-400 italic mt-2">No deliveries in this bucket match your filters.</div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div id="kanbanView" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <?php foreach ($kanbanBuckets as $status => $bucket): ?>
+                    <div class="kanban-column bg-slate-50 rounded-lg p-3" data-status-column="<?= $status ?>">
+                        <h3 class="text-sm font-semibold text-slate-700 mb-3 flex items-center justify-between">
+                            <span class="flex items-center gap-2">
+                                <span class="inline-block w-2 h-2 rounded-full bg-<?= $bucket['accent'] ?>-500"></span>
+                                <?= htmlspecialchars($bucket['label']) ?>
+                            </span>
+                            <span class="text-xs font-normal text-slate-400 column-count"></span>
+                        </h3>
+                        <div class="max-h-[65vh] overflow-y-auto">
+                            <?php foreach ($bucket['rows'] as $d): echo $renderDeliveryCard($d, $bucket['accent']); endforeach; ?>
+                        </div>
+                        <div class="empty-column-msg hidden text-xs text-slate-400 italic mt-2 text-center">No cards match your filters.</div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
     </div>
 
     <?php if ($canEdit): ?>
@@ -445,18 +587,84 @@ include __DIR__ . '/includes/layout_start.php';
         // Filter tabs + search + archive toggle + collapsible PO groups.
         (function () {
             var currentFilter = 'all';
+            var currentView = 'table';
             var searchInput = document.getElementById('deliverySearch');
             var archiveToggle = document.getElementById('includeArchive');
             var archiveToggleWrap = document.getElementById('archiveToggleWrap');
             var infoEl = document.getElementById('deliveryFilterInfo');
             var tabs = document.querySelectorAll('.filter-tab');
+            var viewTabs = document.querySelectorAll('.view-tab');
             var pageSizeSelect = document.getElementById('deliveryPageSize');
             var prevBtn = document.getElementById('deliveryPrev');
             var nextBtn = document.getElementById('deliveryNext');
+            var filterTabsWrap = document.getElementById('deliveryFilterTabs');
+            var tableViewEl = document.getElementById('tableView');
+            var cardsViewEl = document.getElementById('cardsView');
+            var kanbanViewEl = document.getElementById('kanbanView');
             var collapsedGroups = {};
             var currentPage = 1;
 
+            // Shared filter predicate: whether a delivery card/row passes the
+            // current status tab + search + archive toggle. Used by all three
+            // views. For Kanban view, currentFilter is ignored — the columns
+            // themselves are the status split.
+            function rowPasses(el, ignoreStatusFilter) {
+                var searchText = searchInput.value.trim().toLowerCase();
+                var showArchive = archiveToggle.checked;
+                var status = el.dataset.status;
+                var searchable = el.dataset.search;
+                var daysSinceDelivered = el.dataset.daysSinceDelivered;
+                var passStatus = ignoreStatusFilter || currentFilter === 'all' || status === currentFilter;
+                var passSearch = !searchText || searchable.indexOf(searchText) !== -1;
+                var passArchive = true;
+                if (!showArchive && status === 'Delivered' && daysSinceDelivered !== '' && parseInt(daysSinceDelivered, 10) >= 30) {
+                    passArchive = false;
+                }
+                return passStatus && passSearch && passArchive;
+            }
+
+            function applyCardsFilter() {
+                document.querySelectorAll('#cardsView .delivery-bucket').forEach(function (bucket) {
+                    var visibleCount = 0;
+                    bucket.querySelectorAll('.delivery-card').forEach(function (card) {
+                        var passes = rowPasses(card, false);
+                        card.style.display = passes ? '' : 'none';
+                        if (passes) visibleCount++;
+                    });
+                    var countEl = bucket.querySelector('.bucket-count');
+                    if (countEl) countEl.textContent = '(' + visibleCount + ')';
+                    var emptyMsg = bucket.querySelector('.empty-bucket-msg');
+                    if (emptyMsg) emptyMsg.classList.toggle('hidden', visibleCount > 0);
+                });
+            }
+
+            function applyKanbanFilter() {
+                document.querySelectorAll('#kanbanView .kanban-column').forEach(function (col) {
+                    var visibleCount = 0;
+                    // In Kanban, the column IS the status filter — ignore the tab
+                    col.querySelectorAll('.delivery-card').forEach(function (card) {
+                        var passes = rowPasses(card, true);
+                        card.style.display = passes ? '' : 'none';
+                        if (passes) visibleCount++;
+                    });
+                    var countEl = col.querySelector('.column-count');
+                    if (countEl) countEl.textContent = visibleCount + ' item' + (visibleCount === 1 ? '' : 's');
+                    var emptyMsg = col.querySelector('.empty-column-msg');
+                    if (emptyMsg) emptyMsg.classList.toggle('hidden', visibleCount > 0);
+                });
+            }
+
             function applyFilters() {
+                // Cards and Kanban always update their internal filter (cheap;
+                // they're just show/hide of static DOM). Table view runs the
+                // full pagination pass.
+                applyCardsFilter();
+                applyKanbanFilter();
+                if (currentView === 'table') applyTableFilter();
+                archiveToggleWrap.classList.toggle('hidden', currentFilter === 'Pending' || currentFilter === 'Shipped');
+            }
+
+            function applyTableFilter() {
                 var searchText = searchInput.value.trim().toLowerCase();
                 var showArchive = archiveToggle.checked;
                 var visibleByGroup = {};
@@ -525,9 +733,31 @@ include __DIR__ . '/includes/layout_start.php';
 
                 prevBtn.disabled = currentPage <= 1;
                 nextBtn.disabled = currentPage >= totalPages;
-
-                archiveToggleWrap.classList.toggle('hidden', currentFilter === 'Pending' || currentFilter === 'Shipped');
             }
+
+            function setActiveView(view) {
+                currentView = view;
+                tableViewEl.classList.toggle('hidden', view !== 'table');
+                cardsViewEl.classList.toggle('hidden', view !== 'cards');
+                kanbanViewEl.classList.toggle('hidden', view !== 'kanban');
+                // Filter tabs make sense for Table + Cards but not Kanban
+                // (columns ARE the status split). Hide the tabs on Kanban.
+                filterTabsWrap.classList.toggle('hidden', view === 'kanban');
+                viewTabs.forEach(function (t) {
+                    var isActive = t.dataset.view === view;
+                    t.classList.toggle('active', isActive);
+                    t.classList.toggle('bg-brand-green', isActive);
+                    t.classList.toggle('text-white', isActive);
+                    t.classList.toggle('font-semibold', isActive);
+                    t.classList.toggle('text-slate-600', !isActive);
+                    t.classList.toggle('font-medium', !isActive);
+                });
+                applyFilters();
+            }
+
+            viewTabs.forEach(function (tab) {
+                tab.addEventListener('click', function () { setActiveView(tab.dataset.view); });
+            });
 
             tabs.forEach(function (tab) {
                 tab.addEventListener('click', function () {
@@ -554,6 +784,17 @@ include __DIR__ . '/includes/layout_start.php';
                 var chevron = document.querySelector('.po-group-header[data-group-id="' + groupId + '"] .chevron');
                 if (chevron) chevron.style.transform = collapsedGroups[groupId] ? 'rotate(-90deg)' : '';
                 applyFilters();
+            };
+
+            var collapsedBuckets = {};
+            window.toggleBucket = function (bucketKey) {
+                collapsedBuckets[bucketKey] = !collapsedBuckets[bucketKey];
+                var bucket = document.querySelector('.delivery-bucket[data-bucket="' + bucketKey + '"]');
+                if (!bucket) return;
+                var body = bucket.querySelector('.bucket-body');
+                var chev = bucket.querySelector('.bucket-chevron');
+                if (body) body.classList.toggle('hidden', collapsedBuckets[bucketKey]);
+                if (chev) chev.style.transform = collapsedBuckets[bucketKey] ? 'rotate(-90deg)' : '';
             };
 
             applyFilters();
