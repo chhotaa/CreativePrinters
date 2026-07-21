@@ -3,6 +3,7 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/flash.php';
 require_once __DIR__ . '/includes/activity_log.php';
+require_once __DIR__ . '/includes/stock_movements.php';
 requirePermission('restock_orders', 'view');
 $canEdit = hasPermission('restock_orders', 'edit');
 
@@ -122,6 +123,25 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
                      ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)'
                 );
                 $stockStmt->execute([$order['product_name'], $receivedQty]);
+
+                // Fetch the resulting stock row so we can record the movement
+                // with a concrete stock_id and post-change quantity.
+                $stockRow = $pdo->prepare('SELECT id, quantity FROM stock WHERE product_name = ?');
+                $stockRow->execute([$order['product_name']]);
+                $stockAfter = $stockRow->fetch();
+                if ($stockAfter && $receivedQty > 0) {
+                    recordStockMovement(
+                        $pdo,
+                        (int)$stockAfter['id'],
+                        $order['product_name'],
+                        $receivedQty,
+                        (int)$stockAfter['quantity'],
+                        STOCK_MOVEMENT_RESTOCK_CONFIRM,
+                        null,
+                        'restock_order',
+                        $id
+                    );
+                }
 
                 $pdo->commit();
                 setFlashMessage('Order confirmed and stock updated.');

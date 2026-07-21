@@ -68,6 +68,28 @@ CREATE TABLE IF NOT EXISTS stock (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Audit trail for stock quantity changes. See migration
+-- 2026-07-20_add_stock_movements.sql for full column notes.
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  stock_id INT NULL,
+  product_name VARCHAR(150) NOT NULL,
+  delta INT NOT NULL,
+  quantity_after INT NOT NULL,
+  reason_code VARCHAR(50) NOT NULL,
+  reason_text VARCHAR(255) NULL,
+  source_type VARCHAR(50) NULL,
+  source_id INT NULL,
+  user_id INT NULL,
+  username VARCHAR(50) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (stock_id) REFERENCES stock(id) ON DELETE SET NULL,
+  FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_stock_movements_stock_id (stock_id),
+  INDEX idx_stock_movements_product_name (product_name),
+  INDEX idx_stock_movements_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- A po_number can repeat across multiple item codes (e.g. one customer PO
 -- covering several products), but the same po_number + item_code pair
 -- can't be entered twice.

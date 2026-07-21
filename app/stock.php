@@ -3,6 +3,7 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/flash.php';
 require_once __DIR__ . '/includes/activity_log.php';
+require_once __DIR__ . '/includes/stock_movements.php';
 requirePermission('stock', 'view');
 $canEdit = hasPermission('stock', 'edit');
 
@@ -14,31 +15,83 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $product = trim($_POST['product_name']);
         $qty = (int)$_POST['quantity'];
         $reorder = (int)$_POST['reorder_level'];
+        $reasonText = trim($_POST['reason'] ?? '');
 
         if ($product === '') {
             $error = 'Product name is required.';
         } else {
-            $stmt = $pdo->prepare(
-                'INSERT INTO stock (product_name, quantity, reorder_level) VALUES (?, ?, ?)
-                 ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reorder_level = VALUES(reorder_level)'
-            );
-            $stmt->execute([$product, $qty, $reorder]);
-            setFlashMessage('Stock saved.');
-            logActivity('save_stock', "Saved stock for \"$product\" (qty: $qty, reorder level: $reorder).");
-            header('Location: stock.php');
-            exit;
+            $pdo->beginTransaction();
+            try {
+                // Snapshot the previous quantity (if any) so we can log the delta.
+                $prev = $pdo->prepare('SELECT id, quantity FROM stock WHERE product_name = ?');
+                $prev->execute([$product]);
+                $prevRow = $prev->fetch();
+                $prevQty = $prevRow ? (int)$prevRow['quantity'] : 0;
+
+                $stmt = $pdo->prepare(
+                    'INSERT INTO stock (product_name, quantity, reorder_level) VALUES (?, ?, ?)
+                     ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reorder_level = VALUES(reorder_level)'
+                );
+                $stmt->execute([$product, $qty, $reorder]);
+
+                // Look the row up again to get id (whether newly inserted or updated).
+                $after = $pdo->prepare('SELECT id FROM stock WHERE product_name = ?');
+                $after->execute([$product]);
+                $stockId = (int)$after->fetchColumn();
+
+                $delta = $qty - $prevQty;
+                if ($delta !== 0) {
+                    recordStockMovement(
+                        $pdo, $stockId, $product, $delta, $qty,
+                        STOCK_MOVEMENT_MANUAL_SAVE, $reasonText
+                    );
+                }
+                $pdo->commit();
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $error = 'Could not save stock.';
+            }
+            if ($error === '') {
+                setFlashMessage('Stock saved.');
+                logActivity('save_stock', "Saved stock for \"$product\" (qty: $qty, reorder level: $reorder).");
+                header('Location: stock.php');
+                exit;
+            }
         }
     } elseif (isset($_POST['delete_stock'])) {
         $id = (int)$_POST['stock_id'];
-        $nameStmt = $pdo->prepare('SELECT product_name FROM stock WHERE id = ?');
-        $nameStmt->execute([$id]);
-        $productName = $nameStmt->fetchColumn();
-        $stmt = $pdo->prepare('DELETE FROM stock WHERE id = ?');
-        $stmt->execute([$id]);
-        setFlashMessage('Stock item deleted.');
-        logActivity('delete_stock', "Deleted stock item \"$productName\".");
-        header('Location: stock.php');
-        exit;
+        $pdo->beginTransaction();
+        try {
+            $row = $pdo->prepare('SELECT product_name, quantity FROM stock WHERE id = ?');
+            $row->execute([$id]);
+            $rowData = $row->fetch();
+            if ($rowData) {
+                $productName = $rowData['product_name'];
+                $prevQty = (int)$rowData['quantity'];
+                // Log the drawdown BEFORE the DELETE so stock_id is still valid;
+                // the FK is ON DELETE SET NULL so the history survives either way.
+                if ($prevQty !== 0) {
+                    recordStockMovement(
+                        $pdo, $id, $productName, -$prevQty, 0,
+                        STOCK_MOVEMENT_STOCK_DELETED
+                    );
+                }
+                $del = $pdo->prepare('DELETE FROM stock WHERE id = ?');
+                $del->execute([$id]);
+                $pdo->commit();
+                setFlashMessage('Stock item deleted.');
+                logActivity('delete_stock', "Deleted stock item \"$productName\".");
+            } else {
+                $pdo->commit();
+            }
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $error = 'Could not delete stock item.';
+        }
+        if ($error === '') {
+            header('Location: stock.php');
+            exit;
+        }
     }
 }
 
@@ -53,9 +106,10 @@ include __DIR__ . '/includes/layout_start.php';
             <input type="text" name="product_name" placeholder="Product name" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="number" name="quantity" placeholder="Quantity" required class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-36">
             <input type="number" name="reorder_level" placeholder="Reorder level" value="0" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green w-40">
+            <input type="text" name="reason" placeholder="Reason (optional, e.g. damaged, recount)" class="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green flex-1 min-w-60">
             <button type="submit" name="save_stock" value="1" class="inline-flex items-center justify-center px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Save</button>
         </form>
-        <p class="text-sm text-slate-500 mt-2">Entering an existing product name updates its quantity/reorder level instead of duplicating it.</p>
+        <p class="text-sm text-slate-500 mt-2">Entering an existing product name updates its quantity/reorder level instead of duplicating it. The Reason field is saved to the movement history.</p>
     </div>
     <?php endif; ?>
 
@@ -80,6 +134,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Product</th>
                     <th class="text-left px-3 py-2 font-semibold">Quantity</th>
                     <th class="text-left px-3 py-2 font-semibold">Reorder Level</th>
+                    <th class="text-left px-3 py-2 font-semibold <?= $canEdit ? '' : 'rounded-tr-md' ?>">History</th>
                     <?php if ($canEdit): ?><th class="text-left px-3 py-2 font-semibold rounded-tr-md"></th><?php endif; ?>
                 </tr>
             </thead>
@@ -89,6 +144,9 @@ include __DIR__ . '/includes/layout_start.php';
                     <td class="px-3 py-2"><?= htmlspecialchars($s['product_name']) ?></td>
                     <td class="px-3 py-2"><?= $s['quantity'] ?></td>
                     <td class="px-3 py-2"><?= $s['reorder_level'] ?></td>
+                    <td class="px-3 py-2">
+                        <a href="stock_history.php?id=<?= (int)$s['id'] ?>" class="text-brand-green hover:underline font-medium text-xs">View history</a>
+                    </td>
                     <?php if ($canEdit): ?>
                     <td class="px-3 py-2">
                         <form method="POST" onsubmit="return confirm('Delete this stock item?');" style="margin:0;">
