@@ -190,6 +190,17 @@ CREATE TABLE IF NOT EXISTS activity_log (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Login rate limiting. See migration 2026-07-20_add_login_attempts.sql
+-- for the policy (5 failures per 15 min per username).
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) NOT NULL,
+  ip_address VARCHAR(45) NULL,
+  attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  success BOOLEAN NOT NULL DEFAULT 0,
+  INDEX idx_login_attempts_username_time (username, attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Self-service "forgot password" flow. Only a hash of the reset token is
 -- stored, never the raw token.
 CREATE TABLE IF NOT EXISTS password_resets (

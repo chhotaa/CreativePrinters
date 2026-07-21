@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/activity_log.php';
+require_once __DIR__ . '/includes/login_rate_limit.php';
 
 if (isset($_SESSION['user_id'])) {
     redirectToDashboard();
@@ -14,12 +15,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($username === '' || $password === '') {
         $error = 'Please enter username and password.';
+    } elseif (isLoginBlocked($pdo, $username)) {
+        // Log the lockout to activity_log once per blocked request so
+        // admins can see attacks in the audit trail. We do NOT record
+        // another login_attempt row — that would slide the window and
+        // extend the lockout indefinitely.
+        logActivity('login_blocked', "Login blocked (rate limit) for username \"$username\".", $username);
+        $error = 'Too many failed login attempts. Please try again in ' . LOGIN_WINDOW_MINUTES . ' minutes.';
     } else {
         $stmt = $pdo->prepare('SELECT * FROM users WHERE username = ?');
         $stmt->execute([$username]);
         $user = $stmt->fetch();
+        $success = $user && password_verify($password, $user['password_hash']);
 
-        if ($user && password_verify($password, $user['password_hash'])) {
+        recordLoginAttempt($pdo, $username, $success);
+
+        if ($success) {
             $_SESSION['user_id'] = $user['id'];
             logActivity('login_success', 'Logged in.');
             redirectToDashboard();
