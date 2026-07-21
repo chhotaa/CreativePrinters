@@ -33,7 +33,7 @@ $heading = $pageHeading ?? ($pageTitle ?? '');
     <title><?= htmlspecialchars($pageTitle ?? 'Creative Printers') ?> - Creative Printers</title>
     <?php include __DIR__ . '/tailwind_head.php'; ?>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<body class="app-bg text-slate-800">
     <div class="md:flex md:min-h-screen">
         <!-- Mobile hamburger toggle + backdrop. Hidden on md+ where the
              sidebar is a normal flex child. -->
@@ -59,7 +59,7 @@ $heading = $pageHeading ?? ($pageTitle ?? '');
         </aside>
         <main class="flex-1 p-4 pt-16 md:p-6 md:pt-6">
             <?php if ($heading !== ''): ?>
-                <h2 class="text-2xl font-bold text-brand-dark mb-6 text-center"><?= htmlspecialchars($heading) ?></h2>
+                <h2 class="text-2xl font-bold text-white mb-6 text-center drop-shadow-md"><?= htmlspecialchars($heading) ?></h2>
             <?php endif; ?>
             <?php if (!empty($message)): ?><div class="text-green-700 text-sm bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($message) ?></div><?php endif; ?>
             <?php if (!empty($error)): ?><div class="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($error) ?></div><?php endif; ?>

@@ -50,9 +50,10 @@ $pageTitle = 'Forgot Password';
     <title>Forgot Password - Creative Printers</title>
     <?php include __DIR__ . '/includes/tailwind_head.php'; ?>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-slate-50 p-5">
-    <div class="w-full max-w-sm bg-white rounded-xl shadow-md ring-1 ring-slate-200 p-8">
-        <h2 class="text-2xl font-bold text-brand-dark text-center mb-6">Creative Printers</h2>
+<body class="app-bg min-h-screen flex items-center justify-center p-5 text-slate-800">
+    <div class="w-full max-w-sm bg-white rounded-xl shadow-2xl ring-1 ring-white/20 p-8">
+        <h2 class="text-2xl font-bold text-brand-dark text-center mb-1">Creative Printers</h2>
+        <p class="text-center text-sm text-slate-500 mb-6">Print business, organized</p>
         <?php if ($submitted): ?>
             <div class="text-green-700 text-sm bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-4">If an account with that username exists, we've emailed a password reset link. Check your inbox.</div>
             <a href="login.php" class="block text-center text-sm font-semibold text-brand-green hover:text-brand-greendark">Back to Log In</a>

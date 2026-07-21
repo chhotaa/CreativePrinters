@@ -69,9 +69,10 @@ if ($tokenValid && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_
     <title>Reset Password - Creative Printers</title>
     <?php include __DIR__ . '/includes/tailwind_head.php'; ?>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-slate-50 p-5">
-    <div class="w-full max-w-sm bg-white rounded-xl shadow-md ring-1 ring-slate-200 p-8">
-        <h2 class="text-2xl font-bold text-brand-dark text-center mb-6">Creative Printers</h2>
+<body class="app-bg min-h-screen flex items-center justify-center p-5 text-slate-800">
+    <div class="w-full max-w-sm bg-white rounded-xl shadow-2xl ring-1 ring-white/20 p-8">
+        <h2 class="text-2xl font-bold text-brand-dark text-center mb-1">Creative Printers</h2>
+        <p class="text-center text-sm text-slate-500 mb-6">Print business, organized</p>
         <?php if ($error): ?><div class="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($error) ?></div><?php endif; ?>
         <?php if ($tokenValid): ?>
             <form method="POST" class="space-y-3">
