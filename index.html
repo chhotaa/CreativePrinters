@@ -46,10 +46,10 @@
                 @apply opacity-100 translate-y-0;
             }
             .dot {
-                @apply h-2.5 w-2.5 mx-1 rounded-full inline-block cursor-pointer transition-colors duration-500 bg-[rgba(47,79,79,0.4)];
+                @apply h-2.5 w-2.5 mx-1 rounded-full inline-block cursor-pointer transition-colors duration-500 bg-white/40;
             }
             .dot.active {
-                @apply bg-brand-dark;
+                @apply bg-white;
             }
         }
     </style>
@@ -210,35 +210,35 @@
             </div>
         </section>
 
-        <section id="testimonials" class="section-card bg-brand-green overflow-hidden">
+        <section id="testimonials" class="section-card bg-brand-green overflow-hidden [&_.section-heading]:text-white [&_.section-heading]:hover:text-brand-dark [&_.section-heading]:after:bg-white">
             <h2 class="section-heading">WHAT OUR CLIENTS SAY</h2>
 
-            <div class="carousel-container max-w-[900px] mx-auto overflow-hidden">
+            <div class="carousel-container max-w-[800px] mx-auto overflow-hidden">
                 <div class="carousel-track flex transition-transform duration-700 ease-in-out">
 
-                    <div class="testimonial-slide shrink-0 grow-0 basis-full max-w-[800px] mx-auto p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
+                    <div class="testimonial-slide shrink-0 grow-0 basis-full p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
                         "Creative Printing Solution has been our go-to partner for all branding and stationery needs for years. Their quality is consistently superior, and their delivery is always on time. Highly recommend their die-cutting and textile labels."
                         <span class="testimonial-source block mt-5 font-bold text-base text-brand-dark">- Ramesh Kumar, Textile Manufacturer</span>
                     </div>
 
-                    <div class="testimonial-slide shrink-0 grow-0 basis-full max-w-[800px] mx-auto p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
+                    <div class="testimonial-slide shrink-0 grow-0 basis-full p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
                         "The level of precision in their sticker and label cutting is unmatched. They handled our large order with diligence and professionalism. A truly reliable partner for high-volume printing."
                         <span class="testimonial-source block mt-5 font-bold text-base text-brand-dark">- Lakshmi Traders, Retail Supplier</span>
                     </div>
 
-                    <div class="testimonial-slide shrink-0 grow-0 basis-full max-w-[800px] mx-auto p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-[#00BFFF] shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
+                    <div class="testimonial-slide shrink-0 grow-0 basis-full p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
                         "We appreciate the personal, friendly touch in their graphic design process. They worked closely with us to refine our brochure design, and the final offset print quality was stunning."
-                        <span class="testimonial-source block mt-5 font-bold text-base text-[#00BFFF]">- Kaviya Graphics, Design Agency</span>
+                        <span class="testimonial-source block mt-5 font-bold text-base text-brand-dark">- Kaviya Graphics, Design Agency</span>
                     </div>
 
-                    <div class="testimonial-slide shrink-0 grow-0 basis-full max-w-[800px] mx-auto p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
+                    <div class="testimonial-slide shrink-0 grow-0 basis-full p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
                         "Their turnaround time for urgent hang tags was exceptional. It's clear they use top-of-the-line technology. They saved our production timeline!"
                         <span class="testimonial-source block mt-5 font-bold text-base text-brand-dark">- Senthil Fashions, Garment Exporter</span>
                     </div>
 
-                    <div class="testimonial-slide shrink-0 grow-0 basis-full max-w-[800px] mx-auto p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-[#FFA07A] shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
+                    <div class="testimonial-slide shrink-0 grow-0 basis-full p-10 rounded-[10px] text-center italic text-xl bg-white text-[#333] border-l-4 border-l-brand-dark shadow-[0_4px_15px_rgba(0,0,0,0.2)] transition-all duration-500">
                         "The post-print services, especially the lamination and die-punching, added a premium finish to our gift boxes. Creative Printing is truly a complete solution provider."
-                        <span class="testimonial-source block mt-5 font-bold text-base text-[#FFA07A]">- Balaji Boxes, Packaging Solutions</span>
+                        <span class="testimonial-source block mt-5 font-bold text-base text-brand-dark">- Balaji Boxes, Packaging Solutions</span>
                     </div>
 
                 </div>
