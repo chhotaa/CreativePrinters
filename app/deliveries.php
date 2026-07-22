@@ -149,6 +149,43 @@ foreach ($deliveries as $d) {
     $deliveryOuters[$outerKey]['inner_groups'][$innerKey]['rows'][] = $d;
 }
 
+// Sort outer groups (and their inner groups) by earliest non-delivered
+// due date, so the Pending/Shipped filter views show closest-first.
+// Delivered-only groups sink to the end, ordered by their own earliest date.
+$earliestPending = static function (array $rows): ?string {
+    $min = null;
+    foreach ($rows as $r) {
+        if ($r['status'] === 'Delivered') continue;
+        if ($min === null || $r['due_date'] < $min) $min = $r['due_date'];
+    }
+    return $min;
+};
+$earliestAny = static function (array $rows): string {
+    $min = $rows[0]['due_date'];
+    foreach ($rows as $r) {
+        if ($r['due_date'] < $min) $min = $r['due_date'];
+    }
+    return $min;
+};
+$sortKey = static function (array $rows) use ($earliestPending, $earliestAny): string {
+    $p = $earliestPending($rows);
+    return $p !== null ? '0_' . $p : '1_' . $earliestAny($rows);
+};
+foreach ($deliveryOuters as &$outer) {
+    foreach ($outer['inner_groups'] as &$inner) {
+        $inner['_sort'] = $sortKey($inner['rows']);
+    }
+    unset($inner);
+    uasort($outer['inner_groups'], static fn($a, $b) => strcmp($a['_sort'], $b['_sort']));
+    $allRows = [];
+    foreach ($outer['inner_groups'] as $inner) {
+        foreach ($inner['rows'] as $r) $allRows[] = $r;
+    }
+    $outer['_sort'] = $sortKey($allRows);
+}
+unset($outer);
+uasort($deliveryOuters, static fn($a, $b) => strcmp($a['_sort'], $b['_sort']));
+
 // Bucket deliveries into time windows (for the Cards view) and status
 // columns (for the Kanban view). Rows still carry all their filter data
 // so the same JS filter logic works across views.
