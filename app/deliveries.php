@@ -107,7 +107,7 @@ $deliveries = $pdo->query(
     "SELECT d.*, po.po_number, po.customer_name, po.item_code, po.description, po.total_quantity AS po_total_quantity
      FROM deliveries d
      JOIN purchase_orders po ON po.id = d.po_id
-     ORDER BY po.po_number ASC, po.item_code ASC, d.due_date ASC"
+     ORDER BY d.due_date ASC, po.po_number ASC, po.item_code ASC"
 )->fetchAll();
 
 // Two-level grouping so the table renders nested: an outer group per
