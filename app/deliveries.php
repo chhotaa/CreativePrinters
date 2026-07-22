@@ -436,6 +436,7 @@ include __DIR__ . '/includes/layout_start.php';
                     Show
                     <select id="deliveryPageSize" class="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
                         <option value="10">10</option>
+                        <option value="20" selected>20</option>
                         <option value="25">25</option>
                         <option value="50">50</option>
                         <option value="all">All</option>
