@@ -94,9 +94,10 @@ foreach ($poRows as $r) {
 }
 
 $statusBadge = [
-    'Pending'   => 'bg-amber-100 text-amber-800',
-    'Shipped'   => 'bg-blue-100 text-blue-800',
-    'Delivered' => 'bg-green-100 text-green-800',
+    'Pending'        => 'bg-amber-100 text-amber-800',
+    'Material Ready' => 'bg-purple-100 text-purple-800',
+    'Shipped'        => 'bg-blue-100 text-blue-800',
+    'Delivered'      => 'bg-green-100 text-green-800',
 ];
 
 $pageTitle = 'Customer Detail';

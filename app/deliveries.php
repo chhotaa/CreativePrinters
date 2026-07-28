@@ -44,7 +44,7 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['update_status'])) {
         $id = (int)$_POST['delivery_id'];
         $status = $_POST['status'];
-        $allowedStatuses = ['Pending', 'Shipped', 'Delivered'];
+        $allowedStatuses = ['Pending', 'Material Ready', 'Shipped', 'Delivered'];
         if (!in_array($status, $allowedStatuses, true)) {
             $error = 'Invalid status value.';
         } elseif ($status === 'Delivered') {
@@ -53,11 +53,20 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $dcDate = $_POST['dc_date'] ?? '';
             $billDate = $_POST['bill_date'] ?? '';
 
-            if ($dcNumber === '' || $invoiceNumber === '' || $dcDate === '' || $billDate === '') {
-                $error = 'DC Number, Invoice Number, DC Date, and Bill Date are all required to mark a delivery as Delivered.';
+            $hasDcPair = $dcNumber !== '' && $dcDate !== '';
+            $hasInvoicePair = $invoiceNumber !== '' && $billDate !== '';
+            if (!$hasDcPair && !$hasInvoicePair) {
+                $error = 'To mark as Delivered, provide either DC Number + DC Date or Invoice Number + Bill Date.';
             } else {
                 $stmt = $pdo->prepare("UPDATE deliveries SET status = ?, dc_number = ?, invoice_number = ?, dc_date = ?, bill_date = ? WHERE id = ? AND status != 'Delivered'");
-                $stmt->execute([$status, $dcNumber, $invoiceNumber, $dcDate, $billDate, $id]);
+                $stmt->execute([
+                    $status,
+                    $dcNumber !== '' ? $dcNumber : null,
+                    $invoiceNumber !== '' ? $invoiceNumber : null,
+                    $dcDate !== '' ? $dcDate : null,
+                    $billDate !== '' ? $billDate : null,
+                    $id,
+                ]);
                 if ($stmt->rowCount() === 0) {
                     $error = 'This delivery is already marked Delivered and cannot be changed.';
                 } else {
@@ -75,6 +84,35 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 setFlashMessage('Status updated.');
                 logActivity('update_delivery_status', "Updated delivery #$id status to $status.");
+                header('Location: deliveries.php');
+                exit;
+            }
+        }
+    } elseif (isset($_POST['edit_delivery_details'])) {
+        $id = (int)$_POST['delivery_id'];
+        $dcNumber = trim($_POST['dc_number'] ?? '');
+        $invoiceNumber = trim($_POST['invoice_number'] ?? '');
+        $dcDate = $_POST['dc_date'] ?? '';
+        $billDate = $_POST['bill_date'] ?? '';
+
+        $hasDcPair = $dcNumber !== '' && $dcDate !== '';
+        $hasInvoicePair = $invoiceNumber !== '' && $billDate !== '';
+        if (!$hasDcPair && !$hasInvoicePair) {
+            $error = 'At least one full pair (DC Number + DC Date, or Invoice Number + Bill Date) must remain filled.';
+        } else {
+            $stmt = $pdo->prepare("UPDATE deliveries SET dc_number = ?, invoice_number = ?, dc_date = ?, bill_date = ? WHERE id = ? AND status = 'Delivered'");
+            $stmt->execute([
+                $dcNumber !== '' ? $dcNumber : null,
+                $invoiceNumber !== '' ? $invoiceNumber : null,
+                $dcDate !== '' ? $dcDate : null,
+                $billDate !== '' ? $billDate : null,
+                $id,
+            ]);
+            if ($stmt->rowCount() === 0) {
+                $error = 'That delivery could not be updated (it may not be marked Delivered).';
+            } else {
+                setFlashMessage('Delivery details updated.');
+                logActivity('edit_delivery_details', "Updated details for delivery #$id (DC: $dcNumber, Invoice: $invoiceNumber).");
                 header('Location: deliveries.php');
                 exit;
             }
@@ -199,6 +237,7 @@ $cardBuckets = [
 ];
 $kanbanBuckets = [
     'Pending' => ['label' => 'Pending', 'accent' => 'amber', 'rows' => []],
+    'Material Ready' => ['label' => 'Material Ready', 'accent' => 'purple', 'rows' => []],
     'Shipped' => ['label' => 'Shipped', 'accent' => 'blue', 'rows' => []],
     'Delivered' => ['label' => 'Delivered', 'accent' => 'green', 'rows' => []],
 ];
@@ -311,6 +350,7 @@ include __DIR__ . '/includes/layout_start.php';
                 <div id="deliveryFilterTabs" class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
                     <button type="button" data-filter="all" class="filter-tab active px-3 py-1.5 font-semibold text-white bg-brand-dark">All</button>
                     <button type="button" data-filter="Pending" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Pending</button>
+                    <button type="button" data-filter="Material Ready" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Material Ready</button>
                     <button type="button" data-filter="Shipped" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Shipped</button>
                     <button type="button" data-filter="Delivered" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Delivered</button>
                 </div>
@@ -335,6 +375,7 @@ include __DIR__ . '/includes/layout_start.php';
             <?php
             $deliveryStatusBadge = [
                 'Pending' => 'bg-amber-100 text-amber-800',
+                'Material Ready' => 'bg-purple-100 text-purple-800',
                 'Shipped' => 'bg-blue-100 text-blue-800',
                 'Delivered' => 'bg-green-100 text-green-800',
             ];
@@ -399,6 +440,7 @@ include __DIR__ . '/includes/layout_start.php';
                             <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                             <select name="status" onchange="handleStatusChange(this)" data-delivery-id="<?= $d['id'] ?>" data-current-status="<?= htmlspecialchars($d['status']) ?>" <?= $d['status'] === 'Delivered' ? 'disabled title="Delivered deliveries cannot be changed"' : '' ?> class="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
                                 <option value="Pending" <?= $d['status'] === 'Pending' ? 'selected' : '' ?>>Pending</option>
+                                <option value="Material Ready" <?= $d['status'] === 'Material Ready' ? 'selected' : '' ?>>Material Ready</option>
                                 <option value="Shipped" <?= $d['status'] === 'Shipped' ? 'selected' : '' ?>>Shipped</option>
                                 <option value="Delivered" <?= $d['status'] === 'Delivered' ? 'selected' : '' ?>>Delivered</option>
                             </select>
@@ -409,7 +451,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold <?= $badgeClass ?>"><?= htmlspecialchars($d['status']) ?></span></td>
                     <?php endif; ?>
                     <td class="px-3 py-2 whitespace-nowrap">
-                        <?php if ($d['status'] === 'Delivered' && $d['dc_number']): ?>
+                        <?php if ($d['status'] === 'Delivered' && ($d['dc_number'] || $d['invoice_number'])): ?>
                             <button type="button" onclick="viewDeliveryDetails(<?= $d['id'] ?>)" title="View delivery details" class="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer align-middle">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10 3.5c-4.14 0-7.5 3.5-8.5 6.5 1 3 4.36 6.5 8.5 6.5s7.5-3.5 8.5-6.5c-1-3-4.36-6.5-8.5-6.5zm0 11a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/><circle cx="10" cy="10" r="2"/></svg>
                             </button>
@@ -477,7 +519,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <span class="text-slate-700"><span class="text-slate-400">Due</span> <?= htmlspecialchars($d['due_date']) ?></span>
                     <span class="text-slate-700"><span class="text-slate-400">Qty</span> <?= $d['quantity'] ?></span>
                 </div>
-                <?php if ($canEdit || ($d['status'] === 'Delivered' && $d['dc_number'])): ?>
+                <?php if ($canEdit || ($d['status'] === 'Delivered' && ($d['dc_number'] || $d['invoice_number']))): ?>
                 <div class="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
                     <?php if ($canEdit): ?>
                     <form method="POST" style="margin:0;" class="flex-1">
@@ -485,13 +527,14 @@ include __DIR__ . '/includes/layout_start.php';
                         <input type="hidden" name="delivery_id" value="<?= $d['id'] ?>">
                         <select name="status" onchange="handleStatusChange(this)" data-delivery-id="<?= $d['id'] ?>" data-current-status="<?= htmlspecialchars($d['status']) ?>" <?= $d['status'] === 'Delivered' ? 'disabled title="Delivered deliveries cannot be changed"' : '' ?> class="w-full px-3 py-2.5 md:px-2 md:py-1 border border-slate-300 rounded-md text-sm md:text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
                             <option value="Pending" <?= $d['status'] === 'Pending' ? 'selected' : '' ?>>Pending</option>
+                            <option value="Material Ready" <?= $d['status'] === 'Material Ready' ? 'selected' : '' ?>>Material Ready</option>
                             <option value="Shipped" <?= $d['status'] === 'Shipped' ? 'selected' : '' ?>>Shipped</option>
                             <option value="Delivered" <?= $d['status'] === 'Delivered' ? 'selected' : '' ?>>Delivered</option>
                         </select>
                         <input type="hidden" name="update_status" value="1">
                     </form>
                     <?php endif; ?>
-                    <?php if ($d['status'] === 'Delivered' && $d['dc_number']): ?>
+                    <?php if ($d['status'] === 'Delivered' && ($d['dc_number'] || $d['invoice_number'])): ?>
                         <button type="button" onclick="viewDeliveryDetails(<?= $d['id'] ?>)" title="View delivery details" class="inline-flex items-center justify-center w-10 h-10 md:w-7 md:h-7 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10 3.5c-4.14 0-7.5 3.5-8.5 6.5 1 3 4.36 6.5 8.5 6.5s7.5-3.5 8.5-6.5c-1-3-4.36-6.5-8.5-6.5zm0 11a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/><circle cx="10" cy="10" r="2"/></svg>
                         </button>
@@ -556,29 +599,40 @@ include __DIR__ . '/includes/layout_start.php';
     <div id="deliveryDetailsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
             <h3 class="text-lg font-semibold text-brand-dark mb-3">Delivery Details</h3>
-            <p class="text-sm text-slate-500 mb-3">Enter these details to mark the delivery as Delivered.</p>
-            <form method="POST" id="deliveryDetailsForm">
+            <p class="text-sm text-slate-500 mb-3">Provide either <strong>DC Number + DC Date</strong> or <strong>Invoice Number + Bill Date</strong> (or both) to mark this delivery as Delivered.</p>
+            <form method="POST" id="deliveryDetailsForm" onsubmit="return validateDeliveryDetails()">
                 <?= csrfField() ?>
                 <input type="hidden" name="delivery_id" id="deliveryDetailsId">
                 <input type="hidden" name="status" value="Delivered">
                 <input type="hidden" name="update_status" value="1">
                 <div class="space-y-3 mb-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">DC Number</label>
-                        <input type="text" name="dc_number" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                    <div class="rounded-md border border-slate-200 p-3">
+                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">DC Info</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">DC Number</label>
+                                <input type="text" name="dc_number" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">DC Date</label>
+                                <input type="date" name="dc_date" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">Invoice Number</label>
-                        <input type="text" name="invoice_number" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                    <div class="rounded-md border border-slate-200 p-3">
+                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Invoice / Bill Info</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Invoice Number</label>
+                                <input type="text" name="invoice_number" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Bill Date</label>
+                                <input type="date" name="bill_date" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">DC Date</label>
-                        <input type="date" name="dc_date" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">Bill Date</label>
-                        <input type="date" name="bill_date" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                    </div>
+                    <div id="deliveryDetailsError" class="hidden text-red-600 text-xs bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
                 </div>
                 <div class="flex justify-end gap-2">
                     <button type="button" onclick="closeDeliveryDetailsModal(true)" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Cancel</button>
@@ -592,21 +646,71 @@ include __DIR__ . '/includes/layout_start.php';
     <div id="viewDetailsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
             <h3 class="text-lg font-semibold text-brand-dark mb-3">Delivery Details</h3>
-            <dl class="space-y-2 text-sm mb-4">
-                <div class="flex justify-between border-b border-slate-100 pb-2"><dt class="text-slate-500">DC Number</dt><dd id="viewDcNumber" class="font-semibold text-brand-dark"></dd></div>
-                <div class="flex justify-between border-b border-slate-100 pb-2"><dt class="text-slate-500">Invoice Number</dt><dd id="viewInvoiceNumber" class="font-semibold text-brand-dark"></dd></div>
-                <div class="flex justify-between border-b border-slate-100 pb-2"><dt class="text-slate-500">DC Date</dt><dd id="viewDcDate" class="font-semibold text-brand-dark"></dd></div>
-                <div class="flex justify-between"><dt class="text-slate-500">Bill Date</dt><dd id="viewBillDate" class="font-semibold text-brand-dark"></dd></div>
-            </dl>
-            <div class="flex justify-end">
-                <button type="button" onclick="closeViewDetailsModal()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Close</button>
+
+            <div id="viewDetailsViewMode">
+                <dl class="space-y-2 text-sm mb-4">
+                    <div id="viewDcNumberRow" class="flex justify-between border-b border-slate-100 pb-2"><dt class="text-slate-500">DC Number</dt><dd id="viewDcNumber" class="font-semibold text-brand-dark"></dd></div>
+                    <div id="viewDcDateRow" class="flex justify-between border-b border-slate-100 pb-2"><dt class="text-slate-500">DC Date</dt><dd id="viewDcDate" class="font-semibold text-brand-dark"></dd></div>
+                    <div id="viewInvoiceNumberRow" class="flex justify-between border-b border-slate-100 pb-2"><dt class="text-slate-500">Invoice Number</dt><dd id="viewInvoiceNumber" class="font-semibold text-brand-dark"></dd></div>
+                    <div id="viewBillDateRow" class="flex justify-between"><dt class="text-slate-500">Bill Date</dt><dd id="viewBillDate" class="font-semibold text-brand-dark"></dd></div>
+                </dl>
+                <div class="flex justify-end gap-2">
+                    <?php if ($canEdit): ?>
+                    <button type="button" onclick="switchToEditDetailsMode()" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Edit</button>
+                    <?php endif; ?>
+                    <button type="button" onclick="closeViewDetailsModal()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Close</button>
+                </div>
             </div>
+
+            <?php if ($canEdit): ?>
+            <div id="viewDetailsEditMode" class="hidden">
+                <p class="text-sm text-slate-500 mb-3">Update DC or invoice info. At least one full pair (<strong>DC Number + DC Date</strong> or <strong>Invoice Number + Bill Date</strong>) must remain filled.</p>
+                <form method="POST" id="editDetailsForm" onsubmit="return validateEditDetails()">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="delivery_id" id="editDetailsId">
+                    <input type="hidden" name="edit_delivery_details" value="1">
+                    <div class="space-y-3 mb-4">
+                        <div class="rounded-md border border-slate-200 p-3">
+                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">DC Info</div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">DC Number</label>
+                                    <input type="text" name="dc_number" id="editDcNumberInput" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">DC Date</label>
+                                    <input type="date" name="dc_date" id="editDcDateInput" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rounded-md border border-slate-200 p-3">
+                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Invoice / Bill Info</div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">Invoice Number</label>
+                                    <input type="text" name="invoice_number" id="editInvoiceNumberInput" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">Bill Date</label>
+                                    <input type="date" name="bill_date" id="editBillDateInput" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="editDetailsError" class="hidden text-red-600 text-xs bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" onclick="switchToViewDetailsMode()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 
     <script>
         var deliveryDetailsData = <?= json_encode(array_reduce($deliveries, function ($carry, $d) {
-            if ($d['status'] === 'Delivered' && $d['dc_number']) {
+            if ($d['status'] === 'Delivered' && ($d['dc_number'] || $d['invoice_number'])) {
                 $carry[$d['id']] = [
                     'dc_number' => $d['dc_number'],
                     'invoice_number' => $d['invoice_number'],
@@ -633,25 +737,107 @@ include __DIR__ . '/includes/layout_start.php';
         function closeDeliveryDetailsModal(reset) {
             document.getElementById('deliveryDetailsModal').classList.add('hidden');
             document.getElementById('deliveryDetailsForm').reset();
+            document.getElementById('deliveryDetailsError').classList.add('hidden');
             if (reset && activeStatusSelect) {
                 activeStatusSelect.value = activeStatusSelect.dataset.currentStatus;
             }
             activeStatusSelect = null;
         }
+
+        function validateDeliveryDetails() {
+            var form = document.getElementById('deliveryDetailsForm');
+            var dcNo = form.dc_number.value.trim();
+            var dcDate = form.dc_date.value.trim();
+            var invNo = form.invoice_number.value.trim();
+            var billDate = form.bill_date.value.trim();
+            var hasDc = dcNo !== '' && dcDate !== '';
+            var hasInv = invNo !== '' && billDate !== '';
+            var errEl = document.getElementById('deliveryDetailsError');
+            if (!hasDc && !hasInv) {
+                errEl.textContent = 'Please fill either DC Number + DC Date or Invoice Number + Bill Date.';
+                errEl.classList.remove('hidden');
+                return false;
+            }
+            errEl.classList.add('hidden');
+            return true;
+        }
         <?php endif; ?>
+
+        var currentViewingDeliveryId = null;
 
         function viewDeliveryDetails(id) {
             var data = deliveryDetailsData[id];
             if (!data) return;
-            document.getElementById('viewDcNumber').textContent = data.dc_number;
-            document.getElementById('viewInvoiceNumber').textContent = data.invoice_number;
-            document.getElementById('viewDcDate').textContent = data.dc_date;
-            document.getElementById('viewBillDate').textContent = data.bill_date;
+            currentViewingDeliveryId = id;
+            var fields = [
+                ['viewDcNumber', 'viewDcNumberRow', data.dc_number],
+                ['viewDcDate', 'viewDcDateRow', data.dc_date],
+                ['viewInvoiceNumber', 'viewInvoiceNumberRow', data.invoice_number],
+                ['viewBillDate', 'viewBillDateRow', data.bill_date],
+            ];
+            fields.forEach(function (f) {
+                var valEl = document.getElementById(f[0]);
+                var rowEl = document.getElementById(f[1]);
+                var val = f[2];
+                if (val === null || val === undefined || val === '') {
+                    rowEl.classList.add('hidden');
+                    valEl.textContent = '';
+                } else {
+                    rowEl.classList.remove('hidden');
+                    valEl.textContent = val;
+                }
+            });
+            switchToViewDetailsMode();
             document.getElementById('viewDetailsModal').classList.remove('hidden');
         }
 
         function closeViewDetailsModal() {
             document.getElementById('viewDetailsModal').classList.add('hidden');
+            switchToViewDetailsMode();
+            currentViewingDeliveryId = null;
+        }
+
+        function switchToViewDetailsMode() {
+            var viewSection = document.getElementById('viewDetailsViewMode');
+            var editSection = document.getElementById('viewDetailsEditMode');
+            if (viewSection) viewSection.classList.remove('hidden');
+            if (editSection) {
+                editSection.classList.add('hidden');
+                var errEl = document.getElementById('editDetailsError');
+                if (errEl) errEl.classList.add('hidden');
+            }
+        }
+
+        function switchToEditDetailsMode() {
+            if (currentViewingDeliveryId === null) return;
+            var data = deliveryDetailsData[currentViewingDeliveryId];
+            if (!data) return;
+            document.getElementById('editDetailsId').value = currentViewingDeliveryId;
+            document.getElementById('editDcNumberInput').value = data.dc_number || '';
+            document.getElementById('editDcDateInput').value = data.dc_date || '';
+            document.getElementById('editInvoiceNumberInput').value = data.invoice_number || '';
+            document.getElementById('editBillDateInput').value = data.bill_date || '';
+            document.getElementById('viewDetailsViewMode').classList.add('hidden');
+            document.getElementById('viewDetailsEditMode').classList.remove('hidden');
+            document.getElementById('editDetailsError').classList.add('hidden');
+        }
+
+        function validateEditDetails() {
+            var form = document.getElementById('editDetailsForm');
+            var dcNo = form.dc_number.value.trim();
+            var dcDate = form.dc_date.value.trim();
+            var invNo = form.invoice_number.value.trim();
+            var billDate = form.bill_date.value.trim();
+            var hasDc = dcNo !== '' && dcDate !== '';
+            var hasInv = invNo !== '' && billDate !== '';
+            var errEl = document.getElementById('editDetailsError');
+            if (!hasDc && !hasInv) {
+                errEl.textContent = 'At least one full pair (DC Number + DC Date or Invoice Number + Bill Date) must remain filled.';
+                errEl.classList.remove('hidden');
+                return false;
+            }
+            errEl.classList.add('hidden');
+            return true;
         }
 
         // Filter tabs + search + archive toggle + collapsible PO groups.
@@ -732,7 +918,7 @@ include __DIR__ . '/includes/layout_start.php';
                 applyCardsFilter();
                 applyKanbanFilter();
                 if (currentView === 'table') applyTableFilter();
-                archiveToggleWrap.classList.toggle('hidden', currentFilter === 'Pending' || currentFilter === 'Shipped');
+                archiveToggleWrap.classList.toggle('hidden', currentFilter === 'Pending' || currentFilter === 'Material Ready' || currentFilter === 'Shipped');
             }
 
             function applyTableFilter() {

@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS deliveries (
   due_date DATE NOT NULL,
   quantity INT NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'Pending'
-    CHECK (status IN ('Pending','Shipped','Delivered')),
+    CHECK (status IN ('Pending','Material Ready','Shipped','Delivered')),
   dc_number VARCHAR(100) NULL,
   invoice_number VARCHAR(100) NULL,
   dc_date DATE NULL,
