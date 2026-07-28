@@ -18,6 +18,7 @@ $modules = [
     'stock' => 'Stock',
     'purchase_orders' => 'Purchase Orders',
     'deliveries' => 'Delivery Schedule',
+    'delivered_items' => 'Delivered Items',
     'restock_orders' => 'Restock Orders',
     'job_cards' => 'Job Cards',
     'customers' => 'Customers',

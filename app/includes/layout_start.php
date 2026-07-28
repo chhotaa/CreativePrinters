@@ -12,7 +12,7 @@ $navItems = ['index.php' => 'Dashboard'];
 if (hasPermission('stock', 'view')) $navItems['stock.php'] = 'Stock';
 if (hasPermission('purchase_orders', 'view')) $navItems['purchase_orders.php'] = 'Purchase Orders';
 if (hasPermission('deliveries', 'view')) $navItems['deliveries.php'] = 'Delivery Schedule';
-if (hasPermission('deliveries', 'view')) $navItems['delivered_items.php'] = 'Delivered Items';
+if (hasPermission('delivered_items', 'view')) $navItems['delivered_items.php'] = 'Delivered Items';
 if (hasPermission('restock_orders', 'view')) $navItems['restock_orders.php'] = 'Restock Orders';
 if (hasPermission('job_cards', 'view')) $navItems['job_cards.php'] = 'Job Cards';
 if (hasPermission('customers', 'view')) $navItems['customers.php'] = 'Customers';

@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
-requirePermission('deliveries', 'view');
+requirePermission('delivered_items', 'view');
 
 // Every delivery that has been marked Delivered, joined with its PO
 // so we can show PO context (customer, item, dates) alongside the
