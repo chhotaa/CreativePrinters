@@ -37,6 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             rotateCsrfToken();
             $_SESSION['user_id'] = $user['id'];
+            $_SESSION['login_time'] = time();
+            $_SESSION['last_activity'] = time();
             logActivity('login_success', 'Logged in.');
             redirectToDashboard();
         } else {
@@ -59,6 +61,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <h2 class="text-2xl font-bold text-brand-dark text-center mb-1">Creative Printers</h2>
         <p class="text-center text-sm text-slate-500 mb-6">Print business, organized</p>
         <?php if ($error): ?><div class="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+        <?php
+        $timeout = $_GET['timeout'] ?? '';
+        if ($timeout === 'idle') {
+            $timeoutMsg = 'You were signed out after 30 minutes of inactivity. Please log in again.';
+        } elseif ($timeout === 'absolute') {
+            $timeoutMsg = 'Your session expired. Please log in again.';
+        } else {
+            $timeoutMsg = '';
+        }
+        ?>
+        <?php if ($timeoutMsg): ?><div class="text-amber-700 text-sm bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4"><?= htmlspecialchars($timeoutMsg) ?></div><?php endif; ?>
         <form method="POST" class="space-y-3">
             <input type="text" name="username" placeholder="Username" required autofocus class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
             <input type="password" name="password" placeholder="Password" required class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
