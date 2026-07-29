@@ -65,7 +65,7 @@ $navIcons = [
         </button>
         <div id="navBackdrop" class="hidden md:hidden fixed inset-0 bg-black/40 z-30"></div>
 
-        <aside id="sideNav" class="w-60 shrink-0 bg-brand-dark text-white flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform md:relative md:translate-x-0">
+        <aside id="sideNav" class="w-60 shrink-0 bg-brand-dark text-white flex flex-col fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0">
             <div class="px-5 py-5 border-b border-white/10">
                 <span class="font-bold text-lg">Creative Printers</span>
                 <div class="mt-2 text-xs text-white/60">
