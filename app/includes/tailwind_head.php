@@ -1,3 +1,5 @@
+<link rel="icon" href="/image/favicon.ico" type="image/x-icon">
+<link rel="shortcut icon" href="/image/favicon.ico" type="image/x-icon">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
