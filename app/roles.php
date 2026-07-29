@@ -16,6 +16,7 @@ $error = '';
 // includes/layout_start.php so the page is reachable once permitted.
 $modules = [
     'stock' => 'Stock',
+    'stock_requests' => 'Stock Requests',
     'purchase_orders' => 'Purchase Orders',
     'deliveries' => 'Delivery Schedule',
     'delivered_items' => 'Delivered Items',

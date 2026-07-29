@@ -8,6 +8,11 @@ $canViewStock = hasPermission('stock', 'view');
 $canViewPOs = hasPermission('purchase_orders', 'view');
 $canViewDeliveries = hasPermission('deliveries', 'view');
 $canViewRestock = hasPermission('restock_orders', 'view');
+// Approver check on the dashboard mirrors the same rule the page enforces.
+$canApproveStockRequests = in_array($user['role_name'], ['Owner', 'Super Admin'], true);
+$pendingStockRequests = $canApproveStockRequests ? (int)$pdo->query(
+    "SELECT COUNT(*) c FROM stock_requests WHERE status = 'Pending'"
+)->fetch()['c'] : 0;
 
 $stockCount = $canViewStock ? $pdo->query('SELECT COUNT(*) c FROM stock')->fetch()['c'] : 0;
 $poCount = $canViewPOs ? $pdo->query('SELECT COUNT(*) c FROM purchase_orders')->fetch()['c'] : 0;
@@ -83,6 +88,15 @@ include __DIR__ . '/includes/layout_start.php';
                 <?= $pendingRestockCount > 0 ? 'Awaiting action' : 'All clear' ?>
             </span>
         </div>
+        <?php endif; ?>
+        <?php if ($canApproveStockRequests): ?>
+        <a href="stock_requests.php" class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 hover:shadow-md transition-shadow block">
+            <p class="text-sm text-slate-500">Stock requests awaiting approval</p>
+            <p class="text-3xl font-semibold text-slate-900 mt-1"><?= $pendingStockRequests ?></p>
+            <span class="inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-semibold <?= $pendingStockRequests > 0 ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800' ?>">
+                <?= $pendingStockRequests > 0 ? 'Needs review' : 'All clear' ?>
+            </span>
+        </a>
         <?php endif; ?>
     </div>
 

@@ -253,6 +253,47 @@ CREATE TABLE IF NOT EXISTS attachments (
   FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Multi-line stock requests: users with stock_requests:edit raise a
+-- "cart" of items. Owner + Super Admin (hardcoded in the PHP page,
+-- not RBAC-driven) approve atomically (reduces stock + writes
+-- stock_movements rows) or reject with a reason. Requesters can
+-- soft-delete their own Pending requests with a reason -- the row
+-- is kept and its status flips to 'Deleted by User' with the
+-- reason in delete_reason so approvers still see the history.
+-- Optional link to a PO or job card gives the approver context.
+CREATE TABLE IF NOT EXISTS stock_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  requested_by_user_id INT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+  purpose VARCHAR(255) NULL,
+  linked_po_id INT NULL,
+  linked_job_card_id INT NULL,
+  reviewed_by_user_id INT NULL,
+  reviewed_at TIMESTAMP NULL,
+  review_notes VARCHAR(500) NULL,
+  delete_reason VARCHAR(500) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT stock_requests_status_chk
+    CHECK (status IN ('Pending','Approved','Rejected','Deleted by User')),
+  FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (linked_po_id) REFERENCES purchase_orders(id) ON DELETE SET NULL,
+  FOREIGN KEY (linked_job_card_id) REFERENCES job_cards(id) ON DELETE SET NULL,
+  INDEX idx_stock_requests_status (status),
+  INDEX idx_stock_requests_requester (requested_by_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS stock_request_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  request_id INT NOT NULL,
+  stock_id INT NOT NULL,
+  product_name VARCHAR(150) NOT NULL,
+  quantity INT NOT NULL,
+  FOREIGN KEY (request_id) REFERENCES stock_requests(id) ON DELETE CASCADE,
+  FOREIGN KEY (stock_id) REFERENCES stock(id) ON DELETE RESTRICT,
+  INDEX idx_stock_request_items_request (request_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Cross-table FKs added last, once all referenced tables exist.
 ALTER TABLE purchase_orders
   ADD FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL;
