@@ -273,12 +273,85 @@ $pos = $canEdit ? $pdo->query(
      ORDER BY po.po_number"
 )->fetchAll() : [];
 
-$deliveries = $pdo->query(
-    "SELECT d.*, po.po_number, po.customer_name, po.item_code, po.description, po.total_quantity AS po_total_quantity
-     FROM deliveries d
-     JOIN purchase_orders po ON po.id = d.po_id
-     ORDER BY d.due_date ASC, po.po_number ASC, po.item_code ASC"
-)->fetchAll();
+// ------- SERVER-SIDE PAGINATION ---------
+// URL params drive which PO groups appear on this page. All other query
+// state (filter, search) also lives in the URL so bookmarks and back /
+// forward work naturally.
+$pageSizeOptions = [10, 20, 50, 100];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$sizeIn = (int)($_GET['size'] ?? 20);
+$size = in_array($sizeIn, $pageSizeOptions, true) ? $sizeIn : 20;
+$allowedFilters = ['all','Pending','Material Ready','Shipped','Delivered'];
+$filterIn = $_GET['filter'] ?? 'all';
+$filter = in_array($filterIn, $allowedFilters, true) ? $filterIn : 'all';
+$q = trim($_GET['q'] ?? '');
+$includeArchive = isset($_GET['archive']) && $_GET['archive'] === '1';
+$viewIn = $_GET['view'] ?? 'table';
+$activeView = in_array($viewIn, ['table','cards','kanban'], true) ? $viewIn : 'table';
+
+// Build WHERE clauses shared by the count + PO-picker queries. A PO
+// qualifies for the page if it has at least one row that passes the
+// current filter + search.
+$whereBits = [];
+$whereParams = [];
+if ($filter !== 'all') {
+    $whereBits[] = 'd.status = ?';
+    $whereParams[] = $filter;
+}
+if ($q !== '') {
+    $whereBits[] = '(po.po_number LIKE ? OR po.customer_name LIKE ? OR po.item_code LIKE ? OR po.description LIKE ?)';
+    $qLike = '%' . $q . '%';
+    array_push($whereParams, $qLike, $qLike, $qLike, $qLike);
+}
+// Hide old delivered rows unless the archive toggle is on.
+if (!$includeArchive) {
+    $whereBits[] = "(d.status <> 'Delivered' OR d.bill_date IS NULL OR DATEDIFF(CURDATE(), d.bill_date) < 30)";
+}
+$whereSql = $whereBits ? 'WHERE ' . implode(' AND ', $whereBits) : '';
+
+// 1) Count matching PO groups so we can compute page count.
+$countStmt = $pdo->prepare(
+    "SELECT COUNT(DISTINCT po.po_number)
+     FROM deliveries d JOIN purchase_orders po ON po.id = d.po_id
+     $whereSql"
+);
+$countStmt->execute($whereParams);
+$totalPos = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalPos / $size));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $size;
+
+// 2) Pick the PO numbers on this page, ranked by earliest non-delivered
+// due date (Delivered-only groups sink to the bottom).
+$poPickStmt = $pdo->prepare(
+    "SELECT po.po_number,
+            COALESCE(MIN(CASE WHEN d.status <> 'Delivered' THEN d.due_date END), MIN(d.due_date)) AS sort_key,
+            CASE WHEN MIN(CASE WHEN d.status <> 'Delivered' THEN d.due_date END) IS NULL THEN 1 ELSE 0 END AS delivered_only
+     FROM deliveries d JOIN purchase_orders po ON po.id = d.po_id
+     $whereSql
+     GROUP BY po.po_number
+     ORDER BY delivered_only ASC, sort_key ASC, po.po_number ASC
+     LIMIT $size OFFSET $offset"
+);
+$poPickStmt->execute($whereParams);
+$poNumbersOnPage = array_column($poPickStmt->fetchAll(), 'po_number');
+
+// 3) Fetch every delivery row for the POs we picked. We deliberately
+// don't re-apply filter/search here -- once a PO is on the page, we
+// show all its rows so the grouping is complete and consistent.
+if (empty($poNumbersOnPage)) {
+    $deliveries = [];
+} else {
+    $inPh = implode(',', array_fill(0, count($poNumbersOnPage), '?'));
+    $dStmt = $pdo->prepare(
+        "SELECT d.*, po.po_number, po.customer_name, po.item_code, po.description, po.total_quantity AS po_total_quantity
+         FROM deliveries d JOIN purchase_orders po ON po.id = d.po_id
+         WHERE po.po_number IN ($inPh)
+         ORDER BY d.due_date ASC, po.po_number ASC, po.item_code ASC"
+    );
+    $dStmt->execute($poNumbersOnPage);
+    $deliveries = $dStmt->fetchAll();
+}
 
 // Two-level grouping so the table renders nested: an outer group per
 // PO Number (+ Customer), inside which one or more item-code sub-groups
@@ -392,6 +465,14 @@ foreach ($deliveries as $d) {
     }
 }
 
+// Shared across all three views (Table row highlighting, Cards & Kanban card).
+$deliveryStatusBadge = [
+    'Pending' => 'bg-amber-100 text-amber-800',
+    'Material Ready' => 'bg-purple-100 text-purple-800',
+    'Shipped' => 'bg-blue-100 text-blue-800',
+    'Delivered' => 'bg-green-100 text-green-800',
+];
+
 $pageTitle = 'Delivery Schedule';
 include __DIR__ . '/includes/layout_start.php';
 ?>
@@ -469,30 +550,112 @@ include __DIR__ . '/includes/layout_start.php';
     <?php endif; ?>
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
+        <?php
+        // Helper: build a URL preserving current state but overriding one or more params.
+        $buildUrl = function (array $overrides = []) use ($filter, $q, $size, $page, $includeArchive, $activeView) {
+            $current = [
+                'filter' => $filter,
+                'q' => $q,
+                'size' => $size,
+                'page' => $page,
+                'archive' => $includeArchive ? '1' : '',
+                'view' => $activeView === 'table' ? '' : $activeView,
+            ];
+            $merged = array_merge($current, $overrides);
+            // Reset page to 1 whenever a filter/search/size changes.
+            if (!isset($overrides['page'])) $merged['page'] = 1;
+            $merged = array_filter($merged, fn($v) => $v !== '' && $v !== null);
+            return 'deliveries.php' . (empty($merged) ? '' : '?' . http_build_query($merged));
+        };
+        ?>
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div id="viewModeSwitcher" class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
-                <button type="button" data-view="table" class="view-tab active px-3 py-1.5 font-semibold text-white bg-brand-green">Table</button>
-                <button type="button" data-view="cards" class="view-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Cards</button>
-                <button type="button" data-view="kanban" class="view-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Kanban</button>
+            <div class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
+                <?php foreach ([['table','Table'], ['cards','Cards'], ['kanban','Kanban']] as $i => [$viewKey, $viewLabel]):
+                    $isActiveView = $activeView === $viewKey;
+                    $borderClass = $i > 0 ? 'border-l border-slate-300' : '';
+                ?>
+                    <a href="<?= htmlspecialchars($buildUrl(['view' => $viewKey])) ?>" class="px-3 py-1.5 <?= $isActiveView ? 'font-semibold text-white bg-brand-green' : 'font-medium text-slate-600 hover:bg-slate-50 ' . $borderClass ?>"><?= htmlspecialchars($viewLabel) ?></a>
+                <?php endforeach; ?>
             </div>
-            <input type="text" id="deliverySearch" placeholder="Search PO, customer, item..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+            <form method="GET" action="deliveries.php" class="flex items-center gap-2">
+                <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
+                <input type="hidden" name="size" value="<?= (int)$size ?>">
+                <?php if ($includeArchive): ?><input type="hidden" name="archive" value="1"><?php endif; ?>
+                <input type="text" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Search PO, customer, item..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <button type="submit" class="px-3 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Search</button>
+                <?php if ($q !== ''): ?><a href="<?= htmlspecialchars($buildUrl(['q' => ''])) ?>" class="text-xs text-slate-500 underline">clear</a><?php endif; ?>
+            </form>
         </div>
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div class="flex flex-wrap items-center gap-2">
-                <div id="deliveryFilterTabs" class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
-                    <button type="button" data-filter="all" class="filter-tab active px-3 py-1.5 font-semibold text-white bg-brand-dark">All</button>
-                    <button type="button" data-filter="Pending" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Pending</button>
-                    <button type="button" data-filter="Material Ready" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Material Ready</button>
-                    <button type="button" data-filter="Shipped" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Shipped</button>
-                    <button type="button" data-filter="Delivered" class="filter-tab px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300">Delivered</button>
+                <?php if ($activeView === 'table'): // Status filter is only useful on Table; Cards buckets by time, Kanban by status ?>
+                <div class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
+                    <?php foreach ([['all','All'], ['Pending','Pending'], ['Material Ready','Material Ready'], ['Shipped','Shipped'], ['Delivered','Delivered']] as [$key, $label]):
+                        $active = $filter === $key;
+                    ?>
+                        <a href="<?= htmlspecialchars($buildUrl(['filter' => $key])) ?>" class="px-3 py-1.5 <?= $active ? 'font-semibold text-white bg-brand-dark' : 'font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300' ?>"><?= htmlspecialchars($label) ?></a>
+                    <?php endforeach; ?>
                 </div>
-                <label id="archiveToggleWrap" class="hidden flex items-center gap-1.5 text-xs text-slate-600 ml-2">
-                    <input type="checkbox" id="includeArchive" class="rounded border-slate-300 text-brand-green focus:ring-brand-green">
-                    Include archive (delivered 30+ days ago)
+                <?php if ($filter === 'all' || $filter === 'Delivered'): ?>
+                <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-2">
+                    <a href="<?= htmlspecialchars($buildUrl(['archive' => $includeArchive ? '' : '1'])) ?>" class="flex items-center gap-1.5">
+                        <span class="inline-block w-4 h-4 border border-slate-300 rounded <?= $includeArchive ? 'bg-brand-green' : 'bg-white' ?>"></span>
+                        Include archive (delivered 30+ days ago)
+                    </a>
                 </label>
+                <?php endif; ?>
+                <?php endif; // activeView === 'table' ?>
+            </div>
+            <div class="text-xs text-slate-500">
+                <?= number_format($totalPos) ?> PO<?= $totalPos === 1 ? '' : 's' ?> match
+                <?php if ($q !== ''): ?> · searching "<?= htmlspecialchars($q) ?>"<?php endif; ?>
             </div>
         </div>
+        <?php if ($activeView === 'table'): ?>
+        <?php
+        // Shared pagination bar renderer -- shown both above and below the
+        // table so long pages don't require scrolling to hit Prev/Next.
+        $renderPaginationBar = function () use ($totalPos, $offset, $size, $deliveries, $pageSizeOptions, $buildUrl, $page, $totalPages) {
+            ob_start(); ?>
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <div>
+                    <?php if ($totalPos > 0): ?>
+                        Showing POs <?= $offset + 1 ?>–<?= min($offset + $size, $totalPos) ?> of <?= number_format($totalPos) ?>
+                        (<?= count($deliveries) ?> delivery row<?= count($deliveries) === 1 ? '' : 's' ?> on this page)
+                    <?php else: ?>
+                        No matches.
+                    <?php endif; ?>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-1.5">
+                        Show
+                        <select onchange="location.href=this.value" class="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            <?php foreach ($pageSizeOptions as $opt): ?>
+                                <option value="<?= htmlspecialchars($buildUrl(['size' => $opt])) ?>" <?= $size === $opt ? 'selected' : '' ?>><?= $opt ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        POs
+                    </label>
+                    <div class="flex gap-1">
+                        <?php if ($page > 1): ?>
+                            <a href="<?= htmlspecialchars($buildUrl(['page' => $page - 1])) ?>" class="px-3 py-1 rounded-md border border-slate-300 font-medium hover:bg-slate-50">Previous</a>
+                        <?php else: ?>
+                            <span class="px-3 py-1 rounded-md border border-slate-300 font-medium opacity-40 cursor-not-allowed">Previous</span>
+                        <?php endif; ?>
+                        <span class="px-3 py-1 text-slate-600">Page <?= $page ?> / <?= $totalPages ?></span>
+                        <?php if ($page < $totalPages): ?>
+                            <a href="<?= htmlspecialchars($buildUrl(['page' => $page + 1])) ?>" class="px-3 py-1 rounded-md border border-slate-300 font-medium hover:bg-slate-50">Next</a>
+                        <?php else: ?>
+                            <span class="px-3 py-1 rounded-md border border-slate-300 font-medium opacity-40 cursor-not-allowed">Next</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php return ob_get_clean();
+        };
+        ?>
         <div id="tableView">
+        <div class="mb-3"><?= $renderPaginationBar() ?></div>
         <div class="overflow-x-auto max-h-[65vh] overflow-y-auto border border-slate-100 rounded-md">
         <table class="w-full text-sm border-collapse">
             <?php
@@ -509,15 +672,7 @@ include __DIR__ . '/includes/layout_start.php';
                 </tr>
             </thead>
             <tbody id="deliveryGroups">
-            <?php
-            $deliveryStatusBadge = [
-                'Pending' => 'bg-amber-100 text-amber-800',
-                'Material Ready' => 'bg-purple-100 text-purple-800',
-                'Shipped' => 'bg-blue-100 text-blue-800',
-                'Delivered' => 'bg-green-100 text-green-800',
-            ];
-            if (empty($deliveryOuters)):
-            ?>
+            <?php if (empty($deliveryOuters)): ?>
                 <tr><td colspan="<?= $tableColCount ?>" class="px-3 py-6 text-center text-slate-400">No deliveries scheduled yet.</td></tr>
             <?php endif; ?>
             <?php foreach ($deliveryOuters as $outer):
@@ -613,27 +768,9 @@ include __DIR__ . '/includes/layout_start.php';
             </tbody>
         </table>
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-slate-500">
-            <div id="deliveryFilterInfo"></div>
-            <div class="flex items-center gap-3">
-                <label class="flex items-center gap-1.5">
-                    Show
-                    <select id="deliveryPageSize" class="px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                        <option value="10">10</option>
-                        <option value="20" selected>20</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="all">All</option>
-                    </select>
-                    POs
-                </label>
-                <div class="flex gap-1">
-                    <button type="button" id="deliveryPrev" class="px-3 py-1 rounded-md border border-slate-300 font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-                    <button type="button" id="deliveryNext" class="px-3 py-1 rounded-md border border-slate-300 font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
-                </div>
-            </div>
+        <div class="mt-3"><?= $renderPaginationBar() ?></div>
         </div>
-        </div>
+        <?php endif; // activeView === 'table' ?>
 
         <?php
         // Shared renderer for a delivery card used by both the Cards view
@@ -697,7 +834,8 @@ include __DIR__ . '/includes/layout_start.php';
         };
         ?>
 
-        <div id="cardsView" class="hidden">
+        <?php if ($activeView === 'cards'): ?>
+        <div id="cardsView">
             <?php foreach ($cardBuckets as $bucketKey => $bucket): ?>
                 <div class="delivery-bucket mb-5" data-bucket="<?= $bucketKey ?>">
                     <h3 class="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2 cursor-pointer select-none" onclick="toggleBucket('<?= $bucketKey ?>')">
@@ -715,8 +853,10 @@ include __DIR__ . '/includes/layout_start.php';
                 </div>
             <?php endforeach; ?>
         </div>
+        <?php endif; // activeView === 'cards' ?>
 
-        <div id="kanbanView" class="hidden">
+        <?php if ($activeView === 'kanban'): ?>
+        <div id="kanbanView">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <?php foreach ($kanbanBuckets as $status => $bucket): ?>
                     <div class="kanban-column bg-slate-50 rounded-lg p-3" data-status-column="<?= $status ?>">
@@ -735,6 +875,7 @@ include __DIR__ . '/includes/layout_start.php';
                 <?php endforeach; ?>
             </div>
         </div>
+        <?php endif; // activeView === 'kanban' ?>
     </div>
 
     <?php if ($canEdit): ?>
@@ -1145,215 +1286,30 @@ include __DIR__ . '/includes/layout_start.php';
             return true;
         }
 
-        // Filter tabs + search + archive toggle + collapsible PO groups.
+        // PO group collapse toggles. View switching + filter + pagination
+        // are now all server-driven via URL params -- no JS needed for those.
         (function () {
-            var currentFilter = 'all';
-            var currentView = 'table';
-            var searchInput = document.getElementById('deliverySearch');
-            var archiveToggle = document.getElementById('includeArchive');
-            var archiveToggleWrap = document.getElementById('archiveToggleWrap');
-            var infoEl = document.getElementById('deliveryFilterInfo');
-            var tabs = document.querySelectorAll('.filter-tab');
-            var viewTabs = document.querySelectorAll('.view-tab');
-            var pageSizeSelect = document.getElementById('deliveryPageSize');
-            var prevBtn = document.getElementById('deliveryPrev');
-            var nextBtn = document.getElementById('deliveryNext');
-            var filterTabsWrap = document.getElementById('deliveryFilterTabs');
-            var tableViewEl = document.getElementById('tableView');
-            var cardsViewEl = document.getElementById('cardsView');
-            var kanbanViewEl = document.getElementById('kanbanView');
             var collapsedGroups = {};
             var collapsedOuters = {};
-            var currentPage = 1;
 
-            // Shared filter predicate: whether a delivery card/row passes the
-            // current status tab + search + archive toggle. Used by all three
-            // views. For Kanban view, currentFilter is ignored — the columns
-            // themselves are the status split.
-            function rowPasses(el, ignoreStatusFilter) {
-                var searchText = searchInput.value.trim().toLowerCase();
-                var showArchive = archiveToggle.checked;
-                var status = el.dataset.status;
-                var searchable = el.dataset.search;
-                var daysSinceDelivered = el.dataset.daysSinceDelivered;
-                var passStatus = ignoreStatusFilter || currentFilter === 'all' || status === currentFilter;
-                var passSearch = !searchText || searchable.indexOf(searchText) !== -1;
-                var passArchive = true;
-                if (!showArchive && status === 'Delivered' && daysSinceDelivered !== '' && parseInt(daysSinceDelivered, 10) >= 30) {
-                    passArchive = false;
-                }
-                return passStatus && passSearch && passArchive;
-            }
-
-            function applyCardsFilter() {
-                document.querySelectorAll('#cardsView .delivery-bucket').forEach(function (bucket) {
-                    var visibleCount = 0;
-                    bucket.querySelectorAll('.delivery-card').forEach(function (card) {
-                        var passes = rowPasses(card, false);
-                        card.style.display = passes ? '' : 'none';
-                        if (passes) visibleCount++;
-                    });
-                    var countEl = bucket.querySelector('.bucket-count');
-                    if (countEl) countEl.textContent = '(' + visibleCount + ')';
-                    var emptyMsg = bucket.querySelector('.empty-bucket-msg');
-                    if (emptyMsg) emptyMsg.classList.toggle('hidden', visibleCount > 0);
-                });
-            }
-
-            function applyKanbanFilter() {
-                document.querySelectorAll('#kanbanView .kanban-column').forEach(function (col) {
-                    var visibleCount = 0;
-                    // In Kanban, the column IS the status filter — ignore the tab
-                    col.querySelectorAll('.delivery-card').forEach(function (card) {
-                        var passes = rowPasses(card, true);
-                        card.style.display = passes ? '' : 'none';
-                        if (passes) visibleCount++;
-                    });
-                    var countEl = col.querySelector('.column-count');
-                    if (countEl) countEl.textContent = visibleCount + ' item' + (visibleCount === 1 ? '' : 's');
-                    var emptyMsg = col.querySelector('.empty-column-msg');
-                    if (emptyMsg) emptyMsg.classList.toggle('hidden', visibleCount > 0);
-                });
-            }
-
-            function applyFilters() {
-                // Cards and Kanban always update their internal filter (cheap;
-                // they're just show/hide of static DOM). Table view runs the
-                // full pagination pass.
-                applyCardsFilter();
-                applyKanbanFilter();
-                if (currentView === 'table') applyTableFilter();
-                archiveToggleWrap.classList.toggle('hidden', currentFilter === 'Pending' || currentFilter === 'Material Ready' || currentFilter === 'Shipped');
-            }
-
-            function applyTableFilter() {
-                var searchText = searchInput.value.trim().toLowerCase();
-                var showArchive = archiveToggle.checked;
-                var visibleByInner = {};   // po_id -> count of passing rows
-                var visibleByOuter = {};   // po_number -> count of passing rows
-
-                // Pass 1: which rows pass filters?
-                var passesFilterByRow = new Map();
-                document.querySelectorAll('.delivery-row').forEach(function (row) {
-                    var status = row.dataset.status;
-                    var searchable = row.dataset.search;
-                    var innerKey = row.dataset.groupId;
-                    var outerKey = row.dataset.outerKey;
-                    var daysSinceDelivered = row.dataset.daysSinceDelivered;
-                    var passStatus = currentFilter === 'all' || status === currentFilter;
-                    var passSearch = !searchText || searchable.indexOf(searchText) !== -1;
-                    var passArchive = true;
-                    if (!showArchive && status === 'Delivered' && daysSinceDelivered !== '' && parseInt(daysSinceDelivered, 10) >= 30) {
-                        passArchive = false;
-                    }
-                    var passes = passStatus && passSearch && passArchive;
-                    passesFilterByRow.set(row, passes);
-                    if (passes) {
-                        visibleByInner[innerKey] = (visibleByInner[innerKey] || 0) + 1;
-                        visibleByOuter[outerKey] = (visibleByOuter[outerKey] || 0) + 1;
-                    }
-                });
-
-                // Pass 2: paginate by outer group (PO Number).
-                var eligibleOuterKeys = [];
-                document.querySelectorAll('.po-outer-header').forEach(function (header) {
-                    var key = header.dataset.outerKey;
-                    if ((visibleByOuter[key] || 0) > 0) eligibleOuterKeys.push(key);
-                });
-
-                var pageSizeVal = pageSizeSelect.value;
-                var pageSize = pageSizeVal === 'all' ? eligibleOuterKeys.length : parseInt(pageSizeVal, 10);
-                var totalPages = pageSize > 0 ? Math.max(1, Math.ceil(eligibleOuterKeys.length / pageSize)) : 1;
-                if (currentPage > totalPages) currentPage = totalPages;
-                if (currentPage < 1) currentPage = 1;
-                var startIdx = pageSize > 0 ? (currentPage - 1) * pageSize : 0;
-                var endIdx = pageSize > 0 ? startIdx + pageSize : eligibleOuterKeys.length;
-                var pageOuterKeys = new Set(eligibleOuterKeys.slice(startIdx, endIdx));
-
-                // Pass 3: apply visibility across three levels (outer, inner, row).
-                var totalVisibleRows = 0;
-                document.querySelectorAll('.po-outer-header').forEach(function (header) {
-                    var key = header.dataset.outerKey;
-                    header.style.display = pageOuterKeys.has(key) ? '' : 'none';
-                    if (pageOuterKeys.has(key)) totalVisibleRows += visibleByOuter[key] || 0;
-                });
+            function refreshGroupVisibility() {
                 document.querySelectorAll('.po-group-header').forEach(function (header) {
-                    var innerKey = header.dataset.groupId;
                     var outerKey = header.dataset.outerKey;
-                    var onPage = pageOuterKeys.has(outerKey);
-                    var outerCollapsed = !!collapsedOuters[outerKey];
-                    var hasContent = (visibleByInner[innerKey] || 0) > 0;
-                    header.style.display = (onPage && !outerCollapsed && hasContent) ? '' : 'none';
+                    header.style.display = collapsedOuters[outerKey] ? 'none' : '';
                 });
-                passesFilterByRow.forEach(function (passes, row) {
+                document.querySelectorAll('.delivery-row').forEach(function (row) {
                     var innerKey = row.dataset.groupId;
                     var outerKey = row.dataset.outerKey;
-                    var onPage = pageOuterKeys.has(outerKey);
-                    var outerCollapsed = !!collapsedOuters[outerKey];
-                    var innerCollapsed = !!collapsedGroups[innerKey];
-                    row.style.display = (passes && onPage && !outerCollapsed && !innerCollapsed) ? '' : 'none';
+                    var hide = collapsedOuters[outerKey] || collapsedGroups[innerKey];
+                    row.style.display = hide ? 'none' : '';
                 });
-
-                var pageInfo = eligibleOuterKeys.length === 0
-                    ? 'No deliveries match this view.'
-                    : 'Showing POs ' + (startIdx + 1) + '–' + Math.min(endIdx, eligibleOuterKeys.length)
-                        + ' of ' + eligibleOuterKeys.length
-                        + ' (' + totalVisibleRows + ' deliverie' + (totalVisibleRows === 1 ? '' : 's') + ' on this page)';
-                infoEl.textContent = pageInfo;
-
-                prevBtn.disabled = currentPage <= 1;
-                nextBtn.disabled = currentPage >= totalPages;
             }
-
-            function setActiveView(view) {
-                currentView = view;
-                tableViewEl.classList.toggle('hidden', view !== 'table');
-                cardsViewEl.classList.toggle('hidden', view !== 'cards');
-                kanbanViewEl.classList.toggle('hidden', view !== 'kanban');
-                // Filter tabs make sense for Table + Cards but not Kanban
-                // (columns ARE the status split). Hide the tabs on Kanban.
-                filterTabsWrap.classList.toggle('hidden', view === 'kanban');
-                viewTabs.forEach(function (t) {
-                    var isActive = t.dataset.view === view;
-                    t.classList.toggle('active', isActive);
-                    t.classList.toggle('bg-brand-green', isActive);
-                    t.classList.toggle('text-white', isActive);
-                    t.classList.toggle('font-semibold', isActive);
-                    t.classList.toggle('text-slate-600', !isActive);
-                    t.classList.toggle('font-medium', !isActive);
-                });
-                applyFilters();
-            }
-
-            viewTabs.forEach(function (tab) {
-                tab.addEventListener('click', function () { setActiveView(tab.dataset.view); });
-            });
-
-            tabs.forEach(function (tab) {
-                tab.addEventListener('click', function () {
-                    tabs.forEach(function (t) {
-                        t.classList.remove('active', 'bg-brand-dark', 'text-white', 'font-semibold');
-                        t.classList.add('text-slate-600', 'font-medium');
-                    });
-                    tab.classList.add('active', 'bg-brand-dark', 'text-white', 'font-semibold');
-                    tab.classList.remove('text-slate-600', 'font-medium');
-                    currentFilter = tab.dataset.filter;
-                    currentPage = 1;
-                    applyFilters();
-                });
-            });
-
-            searchInput.addEventListener('input', function () { currentPage = 1; applyFilters(); });
-            archiveToggle.addEventListener('change', function () { currentPage = 1; applyFilters(); });
-            pageSizeSelect.addEventListener('change', function () { currentPage = 1; applyFilters(); });
-            prevBtn.addEventListener('click', function () { currentPage--; applyFilters(); });
-            nextBtn.addEventListener('click', function () { currentPage++; applyFilters(); });
 
             window.togglePoGroup = function (groupId) {
                 collapsedGroups[groupId] = !collapsedGroups[groupId];
                 var chevron = document.querySelector('.po-group-header[data-group-id="' + groupId + '"] .chevron');
                 if (chevron) chevron.style.transform = collapsedGroups[groupId] ? 'rotate(-90deg)' : '';
-                applyFilters();
+                refreshGroupVisibility();
             };
 
             window.toggleOuterGroup = function (outerKey) {
@@ -1361,7 +1317,7 @@ include __DIR__ . '/includes/layout_start.php';
                 var attr = outerKey.replace(/"/g, '\\"');
                 var chevron = document.querySelector('.po-outer-header[data-outer-key="' + attr + '"] .outer-chevron');
                 if (chevron) chevron.style.transform = collapsedOuters[outerKey] ? 'rotate(-90deg)' : '';
-                applyFilters();
+                refreshGroupVisibility();
             };
 
             var collapsedBuckets = {};
@@ -1375,15 +1331,13 @@ include __DIR__ . '/includes/layout_start.php';
                 if (chev) chev.style.transform = collapsedBuckets[bucketKey] ? 'rotate(-90deg)' : '';
             };
 
-            // On mobile (< md breakpoint) the Table view is unusable due to
-            // 4 columns of nested rows and small tap targets. Default to
-            // Cards view on small screens. Users can still switch manually;
-            // the table view isn't hidden, just not the initial choice.
-            if (window.matchMedia('(max-width: 767px)').matches) {
-                setActiveView('cards');
+            // Mobile users get sent to the Cards view only on the very
+            // first visit (no query params at all). Once they start
+            // clicking around, we respect whatever view they're on so
+            // pagination Prev/Next doesn't yank them back to Cards.
+            if (window.matchMedia('(max-width: 767px)').matches && location.search === '') {
+                location.replace(location.pathname + '?view=cards');
             }
-
-            applyFilters();
         })();
     </script>
 

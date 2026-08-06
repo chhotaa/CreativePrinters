@@ -195,36 +195,48 @@ $pendingRequests = $canApprove ? $pdo->query(
      ORDER BY r.created_at ASC"
 )->fetchAll() : [];
 
+// ---- Pagination for the history table ----
+require_once __DIR__ . '/includes/pagination.php';
+$pageSizeOptions = [10, 20, 50, 100];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$sizeIn = (int)($_GET['size'] ?? 20);
+$size = in_array($sizeIn, $pageSizeOptions, true) ? $sizeIn : 20;
+
+$currentParams = ['page' => $page, 'size' => $size];
+$urlBuilder = fn(array $ov = []) => pageUrl('stock_requests.php', $currentParams, $ov);
+
 // Requester sees their own requests. Approver sees everyone's.
-if ($canApprove) {
-    $historyStmt = $pdo->query(
-        "SELECT r.id, r.status, r.created_at, r.reviewed_at, r.review_notes, r.delete_reason, r.purpose,
-                u.username AS requester, ru.username AS reviewer,
-                po.po_number, jc.product_name AS job_name
-         FROM stock_requests r
-         JOIN users u ON u.id = r.requested_by_user_id
-         LEFT JOIN users ru ON ru.id = r.reviewed_by_user_id
-         LEFT JOIN purchase_orders po ON po.id = r.linked_po_id
-         LEFT JOIN job_cards jc ON jc.id = r.linked_job_card_id
-         ORDER BY r.created_at DESC LIMIT 100"
-    );
-    $history = $historyStmt->fetchAll();
-} else {
-    $historyStmt = $pdo->prepare(
-        "SELECT r.id, r.status, r.created_at, r.reviewed_at, r.review_notes, r.delete_reason, r.purpose,
-                u.username AS requester, ru.username AS reviewer,
-                po.po_number, jc.product_name AS job_name
-         FROM stock_requests r
-         JOIN users u ON u.id = r.requested_by_user_id
-         LEFT JOIN users ru ON ru.id = r.reviewed_by_user_id
-         LEFT JOIN purchase_orders po ON po.id = r.linked_po_id
-         LEFT JOIN job_cards jc ON jc.id = r.linked_job_card_id
-         WHERE r.requested_by_user_id = ?
-         ORDER BY r.created_at DESC LIMIT 100"
-    );
-    $historyStmt->execute([$me['id']]);
-    $history = $historyStmt->fetchAll();
-}
+$scopeWhere = $canApprove ? '' : 'WHERE r.requested_by_user_id = ?';
+$scopeParams = $canApprove ? [] : [$me['id']];
+
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM stock_requests r $scopeWhere");
+$countStmt->execute($scopeParams);
+$totalHistory = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalHistory / $size));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $size;
+
+$historyStmt = $pdo->prepare(
+    "SELECT r.id, r.status, r.created_at, r.reviewed_at, r.review_notes, r.delete_reason, r.purpose,
+            u.username AS requester, ru.username AS reviewer,
+            po.po_number, jc.product_name AS job_name
+     FROM stock_requests r
+     JOIN users u ON u.id = r.requested_by_user_id
+     LEFT JOIN users ru ON ru.id = r.reviewed_by_user_id
+     LEFT JOIN purchase_orders po ON po.id = r.linked_po_id
+     LEFT JOIN job_cards jc ON jc.id = r.linked_job_card_id
+     $scopeWhere
+     ORDER BY r.created_at DESC
+     LIMIT $size OFFSET $offset"
+);
+$historyStmt->execute($scopeParams);
+$history = $historyStmt->fetchAll();
+
+$historyPagination = [
+    'total' => $totalHistory, 'offset' => $offset, 'size' => $size, 'pageRowCount' => count($history),
+    'page' => $page, 'totalPages' => $totalPages, 'sizeOptions' => $pageSizeOptions,
+    'urlBuilder' => $urlBuilder, 'unit' => 'request',
+];
 
 // One query for all items belonging to any request we're rendering, then
 // bucket them by request_id so the render loop doesn't hit the DB per row.
@@ -382,8 +394,10 @@ include __DIR__ . '/includes/layout_start.php';
 
 <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
     <h3 class="text-lg font-semibold text-brand-dark mb-3"><?= $canApprove ? 'All Requests' : 'My Requests' ?></h3>
-    <?php if (empty($history)): ?>
+    <?php if (empty($history) && $totalHistory === 0): ?>
         <p class="text-sm text-slate-400 py-4 text-center">No requests yet.</p>
+    <?php else: ?>
+    <div class="mb-3"><?php renderPaginationBar($historyPagination); ?></div>
     <?php endif; ?>
     <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -447,6 +461,9 @@ include __DIR__ . '/includes/layout_start.php';
             </tbody>
         </table>
     </div>
+    <?php if ($totalHistory > 0): ?>
+    <div class="mt-3"><?php renderPaginationBar($historyPagination); ?></div>
+    <?php endif; ?>
 </div>
 
 <?php if ($canApprove): ?>

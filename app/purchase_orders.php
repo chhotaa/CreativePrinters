@@ -138,19 +138,60 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_po'])
 }
 
 $existingCustomers = $pdo->query('SELECT name FROM customers ORDER BY name')->fetchAll();
+
+// ---- Pagination + search ----
+require_once __DIR__ . '/includes/pagination.php';
+$pageSizeOptions = [10, 20, 50, 100];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$sizeIn = (int)($_GET['size'] ?? 20);
+$size = in_array($sizeIn, $pageSizeOptions, true) ? $sizeIn : 20;
+$q = trim($_GET['q'] ?? '');
+
+$currentParams = ['page' => $page, 'size' => $size, 'q' => $q];
+$urlBuilder = fn(array $ov = []) => pageUrl('purchase_orders.php', $currentParams, $ov);
+
+$whereBits = [];
+$whereParams = [];
+if ($q !== '') {
+    $whereBits[] = '(po.po_number LIKE ? OR po.customer_name LIKE ? OR c.name LIKE ? OR po.item_code LIKE ? OR po.description LIKE ?)';
+    $qLike = '%' . $q . '%';
+    array_push($whereParams, $qLike, $qLike, $qLike, $qLike, $qLike);
+}
+$whereSql = $whereBits ? 'WHERE ' . implode(' AND ', $whereBits) : '';
+
+$countStmt = $pdo->prepare(
+    "SELECT COUNT(*) FROM purchase_orders po LEFT JOIN customers c ON c.id = po.customer_id $whereSql"
+);
+$countStmt->execute($whereParams);
+$totalPos = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalPos / $size));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $size;
+
 // Prefer the linked customer's current name (so a rename on the Customers
 // page flows through to every PO); fall back to the legacy free-text field
 // for rows that pre-date the customer-linking migration.
-$pos = $pdo->query(
-    'SELECT po.*,
+$posStmt = $pdo->prepare(
+    "SELECT po.*,
             COALESCE(c.name, po.customer_name) AS customer_display,
             (SELECT COUNT(*) FROM deliveries d WHERE d.po_id = po.id) AS delivery_count
      FROM purchase_orders po
      LEFT JOIN customers c ON c.id = po.customer_id
-     ORDER BY po.po_date DESC, po.id DESC'
-)->fetchAll();
+     $whereSql
+     ORDER BY po.po_date DESC, po.id DESC
+     LIMIT $size OFFSET $offset"
+);
+$posStmt->execute($whereParams);
+$pos = $posStmt->fetchAll();
+
 $pageTitle = 'Purchase Orders';
 include __DIR__ . '/includes/layout_start.php';
+
+$paginationArgs = [
+    'total' => $totalPos, 'offset' => $offset, 'size' => $size, 'pageRowCount' => count($pos),
+    'page' => $page, 'totalPages' => $totalPages, 'sizeOptions' => $pageSizeOptions,
+    'urlBuilder' => $urlBuilder, 'unit' => 'PO',
+];
 ?>
     <?php if ($canEdit): ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
@@ -204,20 +245,16 @@ include __DIR__ . '/includes/layout_start.php';
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <input type="text" id="poTableSearch" placeholder="Search purchase orders..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <label class="flex items-center gap-2 text-sm text-slate-600">
-                Show
-                <select id="poTablePageSize" class="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="all">All</option>
-                </select>
-                entries
-            </label>
+            <form method="GET" action="purchase_orders.php" class="flex items-center gap-2">
+                <input type="hidden" name="size" value="<?= (int)$size ?>">
+                <input type="text" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Search purchase orders..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <button type="submit" class="px-3 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Search</button>
+                <?php if ($q !== ''): ?><a href="<?= htmlspecialchars($urlBuilder(['q' => ''])) ?>" class="text-xs text-slate-500 underline">clear</a><?php endif; ?>
+            </form>
         </div>
+        <div class="mb-3"><?php renderPaginationBar($paginationArgs); ?></div>
         <div class="overflow-x-auto">
-        <table id="poTable" class="w-full text-sm border-collapse">
+        <table class="w-full text-sm border-collapse">
             <thead>
                 <tr class="bg-brand-dark text-white">
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">PO Number</th>
@@ -263,12 +300,6 @@ include __DIR__ . '/includes/layout_start.php';
             </tbody>
         </table>
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm text-slate-600">
-            <span id="poTableInfo"></span>
-            <div class="flex gap-2">
-                <button type="button" id="poTablePrev" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-                <button type="button" id="poTableNext" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
-            </div>
-        </div>
+        <div class="mt-3"><?php renderPaginationBar($paginationArgs); ?></div>
     </div>
 <?php include __DIR__ . '/includes/layout_end.php'; ?>

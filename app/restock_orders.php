@@ -159,16 +159,62 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $existingProducts = $canEdit ? $pdo->query('SELECT DISTINCT product_name FROM stock ORDER BY product_name')->fetchAll() : [];
 $existingSuppliers = $canEdit ? $pdo->query('SELECT name FROM suppliers ORDER BY name')->fetchAll() : [];
-// Prefer the linked supplier's current name (renaming on the Suppliers page
-// flows through); fall back to the legacy free-text field for old rows.
-$restockOrders = $pdo->query(
-    'SELECT ro.*, COALESCE(s.name, ro.supplier_name) AS supplier_display
+
+// ---- Pagination + search + status filter ----
+require_once __DIR__ . '/includes/pagination.php';
+$pageSizeOptions = [10, 20, 50, 100];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$sizeIn = (int)($_GET['size'] ?? 20);
+$size = in_array($sizeIn, $pageSizeOptions, true) ? $sizeIn : 20;
+$q = trim($_GET['q'] ?? '');
+$allowedStatusFilters = ['all', 'Pending', 'Purchased', 'Confirmed', 'Cancelled'];
+$filterIn = $_GET['filter'] ?? 'all';
+$filter = in_array($filterIn, $allowedStatusFilters, true) ? $filterIn : 'all';
+
+$currentParams = ['page' => $page, 'size' => $size, 'q' => $q, 'filter' => $filter === 'all' ? '' : $filter];
+$urlBuilder = fn(array $ov = []) => pageUrl('restock_orders.php', $currentParams, $ov);
+
+$whereBits = [];
+$whereParams = [];
+if ($filter !== 'all') {
+    $whereBits[] = 'ro.status = ?';
+    $whereParams[] = $filter;
+}
+if ($q !== '') {
+    $whereBits[] = '(ro.product_name LIKE ? OR ro.supplier_name LIKE ? OR s.name LIKE ? OR ro.notes LIKE ?)';
+    $qLike = '%' . $q . '%';
+    array_push($whereParams, $qLike, $qLike, $qLike, $qLike);
+}
+$whereSql = $whereBits ? 'WHERE ' . implode(' AND ', $whereBits) : '';
+
+$countStmt = $pdo->prepare(
+    "SELECT COUNT(*) FROM restock_orders ro LEFT JOIN suppliers s ON s.id = ro.supplier_id $whereSql"
+);
+$countStmt->execute($whereParams);
+$totalRos = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalRos / $size));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $size;
+
+$roStmt = $pdo->prepare(
+    "SELECT ro.*, COALESCE(s.name, ro.supplier_name) AS supplier_display
      FROM restock_orders ro
      LEFT JOIN suppliers s ON s.id = ro.supplier_id
-     ORDER BY ro.created_at DESC'
-)->fetchAll();
+     $whereSql
+     ORDER BY ro.created_at DESC
+     LIMIT $size OFFSET $offset"
+);
+$roStmt->execute($whereParams);
+$restockOrders = $roStmt->fetchAll();
+
 $pageTitle = 'Restock Orders';
 include __DIR__ . '/includes/layout_start.php';
+
+$paginationArgs = [
+    'total' => $totalRos, 'offset' => $offset, 'size' => $size, 'pageRowCount' => count($restockOrders),
+    'page' => $page, 'totalPages' => $totalPages, 'sizeOptions' => $pageSizeOptions,
+    'urlBuilder' => $urlBuilder, 'unit' => 'order',
+];
 ?>
     <?php if ($canEdit): ?>
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
@@ -199,20 +245,24 @@ include __DIR__ . '/includes/layout_start.php';
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <input type="text" id="restockTableSearch" placeholder="Search restock orders..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <label class="flex items-center gap-2 text-sm text-slate-600">
-                Show
-                <select id="restockTablePageSize" class="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="all">All</option>
-                </select>
-                entries
-            </label>
+            <div class="inline-flex rounded-md border border-slate-300 overflow-hidden text-sm">
+                <?php foreach ([['all','All'], ['Pending','Pending'], ['Purchased','Purchased'], ['Confirmed','Confirmed'], ['Cancelled','Cancelled']] as [$key, $label]):
+                    $active = $filter === $key;
+                ?>
+                    <a href="<?= htmlspecialchars($urlBuilder(['filter' => $key === 'all' ? '' : $key])) ?>" class="px-3 py-1.5 <?= $active ? 'font-semibold text-white bg-brand-dark' : 'font-medium text-slate-600 hover:bg-slate-50 border-l border-slate-300' ?>"><?= htmlspecialchars($label) ?></a>
+                <?php endforeach; ?>
+            </div>
+            <form method="GET" action="restock_orders.php" class="flex items-center gap-2">
+                <input type="hidden" name="size" value="<?= (int)$size ?>">
+                <?php if ($filter !== 'all'): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>"><?php endif; ?>
+                <input type="text" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Search restock orders..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <button type="submit" class="px-3 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Search</button>
+                <?php if ($q !== ''): ?><a href="<?= htmlspecialchars($urlBuilder(['q' => ''])) ?>" class="text-xs text-slate-500 underline">clear</a><?php endif; ?>
+            </form>
         </div>
+        <div class="mb-3"><?php renderPaginationBar($paginationArgs); ?></div>
         <div class="overflow-x-auto">
-        <table id="restockTable" class="w-full text-sm border-collapse">
+        <table class="w-full text-sm border-collapse">
             <thead>
                 <tr class="bg-brand-dark text-white">
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Product</th>
@@ -283,12 +333,6 @@ include __DIR__ . '/includes/layout_start.php';
             </tbody>
         </table>
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm text-slate-600">
-            <span id="restockTableInfo"></span>
-            <div class="flex gap-2">
-                <button type="button" id="restockTablePrev" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-                <button type="button" id="restockTableNext" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
-            </div>
-        </div>
+        <div class="mt-3"><?php renderPaginationBar($paginationArgs); ?></div>
     </div>
 <?php include __DIR__ . '/includes/layout_end.php'; ?>
