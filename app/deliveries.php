@@ -749,7 +749,7 @@ include __DIR__ . '/includes/layout_start.php';
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Actions for non-Delivered selections -->
-                <span id="bulkPendingActions" class="hidden flex-wrap items-center gap-2 md:flex">
+                <span id="bulkPendingActions" class="hidden flex-wrap items-center gap-2">
                     <select id="bulkStatusSelect" class="px-3 py-1.5 rounded-md text-slate-800 text-sm">
                         <option value="">Change status to...</option>
                         <option value="Pending">Pending</option>
@@ -761,7 +761,7 @@ include __DIR__ . '/includes/layout_start.php';
                     <button type="button" id="bulkDeleteBtn" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-sm font-semibold hover:bg-red-700">Delete</button>
                 </span>
                 <!-- Actions for all-Delivered selections -->
-                <span id="bulkDeliveredActions" class="hidden flex-wrap items-center gap-2 md:flex">
+                <span id="bulkDeliveredActions" class="hidden flex-wrap items-center gap-2">
                     <button type="button" id="bulkEditDetailsBtn" class="px-3 py-1.5 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Edit DC / Invoice</button>
                 </span>
                 <!-- Shown when selection is mixed -->
