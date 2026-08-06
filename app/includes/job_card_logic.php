@@ -159,10 +159,55 @@ if ($canEdit && isset($_GET['edit'])) {
     $editJobCard = $editStmt->fetch();
 }
 
-$jobCards = $pdo->query('SELECT * FROM job_cards ORDER BY id DESC')->fetchAll();
+// ---- Pagination + search ----
+require_once __DIR__ . '/pagination.php';
+$pageSizeOptions = [10, 20, 50, 100];
+$jcPage = max(1, (int)($_GET['page'] ?? 1));
+$jcSizeIn = (int)($_GET['size'] ?? 20);
+$jcSize = in_array($jcSizeIn, $pageSizeOptions, true) ? $jcSizeIn : 20;
+$jcQ = trim($_GET['q'] ?? '');
 
-$jobCardAttachments = [];
-$allJobCardAttachments = $pdo->query("SELECT * FROM attachments WHERE record_type = 'job_card' ORDER BY uploaded_at DESC")->fetchAll();
-foreach ($allJobCardAttachments as $a) {
-    $jobCardAttachments[$a['record_id']][] = $a;
+$jcCurrentParams = ['page' => $jcPage, 'size' => $jcSize, 'q' => $jcQ];
+$jcUrlBuilder = fn(array $ov = []) => pageUrl('job_cards.php', $jcCurrentParams, $ov);
+
+$jcWhereBits = [];
+$jcWhereParams = [];
+if ($jcQ !== '') {
+    $jcWhereBits[] = '(product_name LIKE ? OR design_name LIKE ? OR board_name_gsm LIKE ? OR details LIKE ? OR order_type LIKE ?)';
+    $qLike = '%' . $jcQ . '%';
+    array_push($jcWhereParams, $qLike, $qLike, $qLike, $qLike, $qLike);
 }
+$jcWhereSql = $jcWhereBits ? 'WHERE ' . implode(' AND ', $jcWhereBits) : '';
+
+$jcCountStmt = $pdo->prepare("SELECT COUNT(*) FROM job_cards $jcWhereSql");
+$jcCountStmt->execute($jcWhereParams);
+$jcTotal = (int)$jcCountStmt->fetchColumn();
+$jcTotalPages = max(1, (int)ceil($jcTotal / $jcSize));
+if ($jcPage > $jcTotalPages) $jcPage = $jcTotalPages;
+$jcOffset = ($jcPage - 1) * $jcSize;
+
+$jcStmt = $pdo->prepare("SELECT * FROM job_cards $jcWhereSql ORDER BY id DESC LIMIT $jcSize OFFSET $jcOffset");
+$jcStmt->execute($jcWhereParams);
+$jobCards = $jcStmt->fetchAll();
+
+// Fetch attachments only for the visible job cards, not the whole table.
+$jobCardAttachments = [];
+if (!empty($jobCards)) {
+    $jcIds = array_column($jobCards, 'id');
+    $inPh = implode(',', array_fill(0, count($jcIds), '?'));
+    $attStmt = $pdo->prepare(
+        "SELECT * FROM attachments
+         WHERE record_type = 'job_card' AND record_id IN ($inPh)
+         ORDER BY uploaded_at DESC"
+    );
+    $attStmt->execute($jcIds);
+    foreach ($attStmt->fetchAll() as $a) {
+        $jobCardAttachments[$a['record_id']][] = $a;
+    }
+}
+
+$jcPaginationArgs = [
+    'total' => $jcTotal, 'offset' => $jcOffset, 'size' => $jcSize, 'pageRowCount' => count($jobCards),
+    'page' => $jcPage, 'totalPages' => $jcTotalPages, 'sizeOptions' => $pageSizeOptions,
+    'urlBuilder' => $jcUrlBuilder, 'unit' => 'card',
+];

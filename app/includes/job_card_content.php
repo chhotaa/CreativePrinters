@@ -102,20 +102,16 @@
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <input type="text" id="jobCardsTableSearch" placeholder="Search job cards..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-            <label class="flex items-center gap-2 text-sm text-slate-600">
-                Show
-                <select id="jobCardsTablePageSize" class="px-2 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="all">All</option>
-                </select>
-                entries
-            </label>
+            <form method="GET" action="job_cards.php" class="flex items-center gap-2">
+                <input type="hidden" name="size" value="<?= (int)$jcSize ?>">
+                <input type="text" name="q" value="<?= htmlspecialchars($jcQ) ?>" placeholder="Search job cards..." class="w-full sm:w-64 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                <button type="submit" class="px-3 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Search</button>
+                <?php if ($jcQ !== ''): ?><a href="<?= htmlspecialchars($jcUrlBuilder(['q' => ''])) ?>" class="text-xs text-slate-500 underline">clear</a><?php endif; ?>
+            </form>
         </div>
+        <div class="mb-3"><?php renderPaginationBar($jcPaginationArgs); ?></div>
         <div class="overflow-x-auto">
-        <table id="jobCardsTable" class="w-full text-sm border-collapse">
+        <table class="w-full text-sm border-collapse">
             <thead>
                 <tr class="bg-brand-dark text-white">
                     <th class="text-left px-3 py-2 font-semibold rounded-tl-md">Sl.No</th>
@@ -156,13 +152,7 @@
             </tbody>
         </table>
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm text-slate-600">
-            <span id="jobCardsTableInfo"></span>
-            <div class="flex gap-2">
-                <button type="button" id="jobCardsTablePrev" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-                <button type="button" id="jobCardsTableNext" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
-            </div>
-        </div>
+        <div class="mt-3"><?php renderPaginationBar($jcPaginationArgs); ?></div>
     </div>
 
     <div id="attachmentsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">

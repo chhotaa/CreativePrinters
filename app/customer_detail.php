@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/flash.php';
+require_once __DIR__ . '/includes/pagination.php';
 requirePermission('customers', 'view');
 
 $customerId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -13,29 +14,22 @@ if ($customerId > 0) {
     $customer = $stmt->fetch();
 }
 
+// ---- Pagination for the PO section ----
+$pageSizeOptions = [10, 20, 50, 100];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$sizeIn = (int)($_GET['size'] ?? 10);
+$size = in_array($sizeIn, $pageSizeOptions, true) ? $sizeIn : 10;
+$currentParams = ['id' => $customerId, 'page' => $page, 'size' => $size];
+$urlBuilder = fn(array $ov = []) => pageUrl('customer_detail.php', $currentParams, $ov);
+
 $poRows = [];
+$totalPos = 0;
+$totalPages = 1;
+$offset = 0;
 $stats = ['po_count' => 0, 'ordered_qty' => 0, 'delivered_qty' => 0, 'overdue' => 0];
 
 if ($customer) {
-    // One row per (PO item, delivery). LEFT JOIN so PO items with no
-    // deliveries yet still appear. Ordering is DESC on po_date so newest
-    // POs come first; within a PO, item_code then due_date so the group
-    // stays coherent when we walk the rows in PHP.
-    $stmt = $pdo->prepare(
-        'SELECT po.id AS po_row_id, po.po_number, po.po_date, po.item_code,
-                po.description, po.total_quantity,
-                d.id AS delivery_id, d.due_date, d.quantity AS delivered_qty,
-                d.status, d.dc_number, d.invoice_number, d.dc_date, d.bill_date
-         FROM purchase_orders po
-         LEFT JOIN deliveries d ON d.po_id = po.id
-         WHERE po.customer_id = ?
-         ORDER BY po.po_date DESC, po.po_number DESC, po.item_code, d.due_date'
-    );
-    $stmt->execute([$customerId]);
-    $poRows = $stmt->fetchAll();
-
-    // Summary stats — computed separately so LEFT JOIN duplicates don't
-    // double-count total_quantity.
+    // Summary stats — computed over ALL POs, not paginated.
     $s = $pdo->prepare(
         'SELECT
            COUNT(DISTINCT po.po_number) AS po_count,
@@ -60,7 +54,47 @@ if ($customer) {
     $agg = $d->fetch();
     $stats['delivered_qty'] = (int)$agg['delivered_qty'];
     $stats['overdue']       = (int)$agg['overdue'];
+
+    // Pick the paginated set of PO numbers, newest first.
+    $totalPos = (int)$stats['po_count'];
+    $totalPages = max(1, (int)ceil($totalPos / $size));
+    if ($page > $totalPages) $page = $totalPages;
+    $offset = ($page - 1) * $size;
+
+    $poPick = $pdo->prepare(
+        "SELECT po_number, MAX(po_date) AS newest_date
+         FROM purchase_orders WHERE customer_id = ?
+         GROUP BY po_number
+         ORDER BY newest_date DESC, po_number DESC
+         LIMIT $size OFFSET $offset"
+    );
+    $poPick->execute([$customerId]);
+    $pageponumbers = array_column($poPick->fetchAll(), 'po_number');
+
+    if (!empty($pageponumbers)) {
+        $inPh = implode(',', array_fill(0, count($pageponumbers), '?'));
+        // One row per (PO item, delivery). LEFT JOIN so PO items with no
+        // deliveries yet still appear.
+        $stmt = $pdo->prepare(
+            "SELECT po.id AS po_row_id, po.po_number, po.po_date, po.item_code,
+                    po.description, po.total_quantity,
+                    d.id AS delivery_id, d.due_date, d.quantity AS delivered_qty,
+                    d.status, d.dc_number, d.invoice_number, d.dc_date, d.bill_date
+             FROM purchase_orders po
+             LEFT JOIN deliveries d ON d.po_id = po.id
+             WHERE po.customer_id = ? AND po.po_number IN ($inPh)
+             ORDER BY po.po_date DESC, po.po_number DESC, po.item_code, d.due_date"
+        );
+        $stmt->execute(array_merge([$customerId], $pageponumbers));
+        $poRows = $stmt->fetchAll();
+    }
 }
+
+$paginationArgs = [
+    'total' => $totalPos, 'offset' => $offset, 'size' => $size, 'pageRowCount' => count($poRows),
+    'page' => $page, 'totalPages' => $totalPages, 'sizeOptions' => $pageSizeOptions,
+    'urlBuilder' => $urlBuilder, 'unit' => 'PO',
+];
 
 // Group flat rows into: po_number -> item_row -> deliveries[]
 $grouped = [];
@@ -144,9 +178,10 @@ include __DIR__ . '/includes/layout_start.php';
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Purchase Orders</h3>
-        <?php if (empty($grouped)): ?>
+        <?php if ($totalPos === 0): ?>
             <p class="text-sm text-slate-500">This customer has no purchase orders yet.</p>
         <?php else: ?>
+            <div class="mb-3"><?php renderPaginationBar($paginationArgs); ?></div>
             <div class="space-y-5">
             <?php foreach ($grouped as $po): ?>
                 <div class="border border-slate-200 rounded-lg overflow-hidden">
@@ -203,6 +238,7 @@ include __DIR__ . '/includes/layout_start.php';
                 </div>
             <?php endforeach; ?>
             </div>
+            <div class="mt-3"><?php renderPaginationBar($paginationArgs); ?></div>
         <?php endif; ?>
     </div>
 <?php endif; ?>

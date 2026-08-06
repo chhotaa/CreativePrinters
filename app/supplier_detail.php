@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/flash.php';
+require_once __DIR__ . '/includes/pagination.php';
 requirePermission('suppliers', 'view');
 
 $supplierId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -13,18 +14,22 @@ if ($supplierId > 0) {
     $supplier = $stmt->fetch();
 }
 
+// ---- Pagination for the restock orders section ----
+$pageSizeOptions = [10, 20, 50, 100];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$sizeIn = (int)($_GET['size'] ?? 20);
+$size = in_array($sizeIn, $pageSizeOptions, true) ? $sizeIn : 20;
+$currentParams = ['id' => $supplierId, 'page' => $page, 'size' => $size];
+$urlBuilder = fn(array $ov = []) => pageUrl('supplier_detail.php', $currentParams, $ov);
+
 $restocks = [];
+$totalRestocks = 0;
+$totalPages = 1;
+$offset = 0;
 $stats = ['total' => 0, 'confirmed' => 0, 'open' => 0, 'received_qty' => 0];
 
 if ($supplier) {
-    $stmt = $pdo->prepare(
-        'SELECT * FROM restock_orders
-         WHERE supplier_id = ?
-         ORDER BY created_at DESC'
-    );
-    $stmt->execute([$supplierId]);
-    $restocks = $stmt->fetchAll();
-
+    // Stats stay based on all restocks (not paginated).
     $s = $pdo->prepare(
         "SELECT
            COUNT(*) AS total,
@@ -40,7 +45,27 @@ if ($supplier) {
     $stats['confirmed']    = (int)$agg['confirmed'];
     $stats['open']         = (int)$agg['open_count'];
     $stats['received_qty'] = (int)$agg['received_qty'];
+
+    $totalRestocks = $stats['total'];
+    $totalPages = max(1, (int)ceil($totalRestocks / $size));
+    if ($page > $totalPages) $page = $totalPages;
+    $offset = ($page - 1) * $size;
+
+    $stmt = $pdo->prepare(
+        "SELECT * FROM restock_orders
+         WHERE supplier_id = ?
+         ORDER BY created_at DESC
+         LIMIT $size OFFSET $offset"
+    );
+    $stmt->execute([$supplierId]);
+    $restocks = $stmt->fetchAll();
 }
+
+$paginationArgs = [
+    'total' => $totalRestocks, 'offset' => $offset, 'size' => $size, 'pageRowCount' => count($restocks),
+    'page' => $page, 'totalPages' => $totalPages, 'sizeOptions' => $pageSizeOptions,
+    'urlBuilder' => $urlBuilder, 'unit' => 'order',
+];
 
 $statusBadge = [
     'Pending'   => 'bg-amber-100 text-amber-800',
@@ -93,9 +118,10 @@ include __DIR__ . '/includes/layout_start.php';
 
     <div class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-5 mb-5">
         <h3 class="text-lg font-semibold text-brand-dark mb-3">Restock Orders</h3>
-        <?php if (empty($restocks)): ?>
+        <?php if ($totalRestocks === 0): ?>
             <p class="text-sm text-slate-500">This supplier has no restock orders yet.</p>
         <?php else: ?>
+            <div class="mb-3"><?php renderPaginationBar($paginationArgs); ?></div>
             <div class="overflow-x-auto">
             <table class="w-full text-sm border-collapse">
                 <thead>
@@ -124,6 +150,7 @@ include __DIR__ . '/includes/layout_start.php';
                 </tbody>
             </table>
             </div>
+            <div class="mt-3"><?php renderPaginationBar($paginationArgs); ?></div>
         <?php endif; ?>
     </div>
 <?php endif; ?>
