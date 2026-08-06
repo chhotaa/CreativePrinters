@@ -129,6 +129,138 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: deliveries.php');
         exit;
     }
+
+    // --------- BULK EDIT DETAILS (already-Delivered rows) ----------
+    // Same shape as bulk_update_status but only touches DC / invoice
+    // fields on rows that are ALREADY Delivered. Status is unchanged.
+    elseif (isset($_POST['bulk_edit_details'])) {
+        $ids = array_values(array_unique(array_map('intval', $_POST['delivery_ids'] ?? [])));
+        $ids = array_filter($ids, fn($i) => $i > 0);
+        if (empty($ids)) {
+            $error = 'No deliveries selected.';
+        } else {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $check = $pdo->prepare(
+                "SELECT COUNT(DISTINCT po.po_number) AS po_count,
+                        MIN(po.po_number) AS po_number,
+                        SUM(CASE WHEN d.status = 'Delivered' THEN 1 ELSE 0 END) AS delivered_count
+                 FROM deliveries d JOIN purchase_orders po ON po.id = d.po_id
+                 WHERE d.id IN ($ph)"
+            );
+            $check->execute($ids);
+            $info = $check->fetch();
+            if ((int)$info['po_count'] !== 1) {
+                $error = 'All selected deliveries must belong to the same PO.';
+            } elseif ((int)$info['delivered_count'] !== count($ids)) {
+                $error = 'Bulk edit only applies to already-Delivered rows.';
+            } else {
+                $dcNumber = trim($_POST['dc_number'] ?? '');
+                $invoiceNumber = trim($_POST['invoice_number'] ?? '');
+                $dcDate = $_POST['dc_date'] ?? '';
+                $billDate = $_POST['bill_date'] ?? '';
+                $hasDcPair = $dcNumber !== '' && $dcDate !== '';
+                $hasInvoicePair = $invoiceNumber !== '' && $billDate !== '';
+                if (!$hasDcPair && !$hasInvoicePair) {
+                    $error = 'At least one full pair (DC Number + DC Date or Invoice Number + Bill Date) must be provided.';
+                } else {
+                    $upd = $pdo->prepare(
+                        "UPDATE deliveries SET dc_number=?, invoice_number=?, dc_date=?, bill_date=?
+                         WHERE id IN ($ph) AND status = 'Delivered'"
+                    );
+                    $params = [
+                        $dcNumber !== '' ? $dcNumber : null,
+                        $invoiceNumber !== '' ? $invoiceNumber : null,
+                        $dcDate !== '' ? $dcDate : null,
+                        $billDate !== '' ? $billDate : null,
+                    ];
+                    $upd->execute(array_merge($params, $ids));
+                    setFlashMessage($upd->rowCount() . ' delivery row(s) had their DC/invoice details updated.');
+                    logActivity('bulk_edit_delivery_details', 'Bulk-edited ' . $upd->rowCount() . " row(s) (PO {$info['po_number']}, DC: $dcNumber, Invoice: $invoiceNumber).");
+                    header('Location: deliveries.php');
+                    exit;
+                }
+            }
+        }
+    }
+
+    // --------- BULK ACTIONS ----------
+    // Selection scope is enforced server-side: every id in the batch
+    // must belong to the same PO number. Prevents mixing customers.
+    elseif (isset($_POST['bulk_update_status']) || isset($_POST['bulk_delete'])) {
+        $ids = array_values(array_unique(array_map('intval', $_POST['delivery_ids'] ?? [])));
+        $ids = array_filter($ids, fn($i) => $i > 0);
+        if (empty($ids)) {
+            $error = 'No deliveries selected.';
+        } else {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $check = $pdo->prepare(
+                "SELECT COUNT(DISTINCT po.po_number) AS po_count,
+                        MIN(po.po_number) AS po_number,
+                        SUM(CASE WHEN d.status = 'Delivered' THEN 1 ELSE 0 END) AS already_delivered
+                 FROM deliveries d JOIN purchase_orders po ON po.id = d.po_id
+                 WHERE d.id IN ($ph)"
+            );
+            $check->execute($ids);
+            $info = $check->fetch();
+            if ((int)$info['po_count'] !== 1) {
+                $error = 'All selected deliveries must belong to the same PO.';
+            } elseif (isset($_POST['bulk_delete'])) {
+                if ((int)$info['already_delivered'] > 0) {
+                    $error = 'Delivered rows cannot be deleted. Uncheck them and try again.';
+                } else {
+                    $del = $pdo->prepare("DELETE FROM deliveries WHERE id IN ($ph)");
+                    $del->execute($ids);
+                    setFlashMessage(count($ids) . ' delivery row(s) deleted.');
+                    logActivity('bulk_delete_delivery', 'Bulk-deleted deliveries ' . implode(',', $ids) . " (PO {$info['po_number']}).");
+                    header('Location: deliveries.php');
+                    exit;
+                }
+            } else {
+                // bulk_update_status
+                $status = $_POST['bulk_status'] ?? '';
+                $allowed = ['Pending', 'Material Ready', 'Shipped', 'Delivered'];
+                if (!in_array($status, $allowed, true)) {
+                    $error = 'Invalid status for bulk update.';
+                } elseif ((int)$info['already_delivered'] > 0) {
+                    $error = 'Selection includes already-Delivered rows. Uncheck them and try again.';
+                } elseif ($status === 'Delivered') {
+                    $dcNumber = trim($_POST['dc_number'] ?? '');
+                    $invoiceNumber = trim($_POST['invoice_number'] ?? '');
+                    $dcDate = $_POST['dc_date'] ?? '';
+                    $billDate = $_POST['bill_date'] ?? '';
+                    $hasDcPair = $dcNumber !== '' && $dcDate !== '';
+                    $hasInvoicePair = $invoiceNumber !== '' && $billDate !== '';
+                    if (!$hasDcPair && !$hasInvoicePair) {
+                        $error = 'To mark as Delivered, provide either DC Number + DC Date or Invoice Number + Bill Date.';
+                    } else {
+                        // Same DC/invoice info applied to every selected row.
+                        $upd = $pdo->prepare(
+                            "UPDATE deliveries SET status='Delivered', dc_number=?, invoice_number=?, dc_date=?, bill_date=?
+                             WHERE id IN ($ph) AND status != 'Delivered'"
+                        );
+                        $params = [
+                            $dcNumber !== '' ? $dcNumber : null,
+                            $invoiceNumber !== '' ? $invoiceNumber : null,
+                            $dcDate !== '' ? $dcDate : null,
+                            $billDate !== '' ? $billDate : null,
+                        ];
+                        $upd->execute(array_merge($params, $ids));
+                        setFlashMessage($upd->rowCount() . ' delivery row(s) marked Delivered.');
+                        logActivity('bulk_mark_delivered', 'Bulk-marked ' . $upd->rowCount() . " row(s) Delivered (PO {$info['po_number']}, DC: $dcNumber, Invoice: $invoiceNumber).");
+                        header('Location: deliveries.php');
+                        exit;
+                    }
+                } else {
+                    $upd = $pdo->prepare("UPDATE deliveries SET status = ? WHERE id IN ($ph) AND status != 'Delivered'");
+                    $upd->execute(array_merge([$status], $ids));
+                    setFlashMessage($upd->rowCount() . " delivery row(s) updated to $status.");
+                    logActivity('bulk_update_status', 'Bulk status ' . $status . ' on ' . $upd->rowCount() . " row(s) (PO {$info['po_number']}).");
+                    header('Location: deliveries.php');
+                    exit;
+                }
+            }
+        }
+    }
 }
 
 $pos = $canEdit ? $pdo->query(
@@ -363,8 +495,13 @@ include __DIR__ . '/includes/layout_start.php';
         <div id="tableView">
         <div class="overflow-x-auto max-h-[65vh] overflow-y-auto border border-slate-100 rounded-md">
         <table class="w-full text-sm border-collapse">
+            <?php
+            // colspan for group-header rows: +1 for the leading checkbox column when the viewer can edit.
+            $tableColCount = $canEdit ? 5 : 4;
+            ?>
             <thead class="sticky top-0 z-10">
                 <tr class="bg-brand-dark text-white">
+                    <?php if ($canEdit): ?><th class="w-8 text-center px-2 py-2"></th><?php endif; ?>
                     <th class="text-left px-3 py-2 font-semibold">Due Date</th>
                     <th class="text-left px-3 py-2 font-semibold">Qty</th>
                     <th class="text-left px-3 py-2 font-semibold">Status</th>
@@ -381,14 +518,14 @@ include __DIR__ . '/includes/layout_start.php';
             ];
             if (empty($deliveryOuters)):
             ?>
-                <tr><td colspan="4" class="px-3 py-6 text-center text-slate-400">No deliveries scheduled yet.</td></tr>
+                <tr><td colspan="<?= $tableColCount ?>" class="px-3 py-6 text-center text-slate-400">No deliveries scheduled yet.</td></tr>
             <?php endif; ?>
             <?php foreach ($deliveryOuters as $outer):
                 $outerKeyAttr = htmlspecialchars($outer['po_number']);
                 $outerItemCount = count($outer['inner_groups']);
             ?>
                 <tr class="po-outer-header bg-brand-dark text-white border-t-2 border-brand-dark cursor-pointer" data-outer-key="<?= $outerKeyAttr ?>" onclick="toggleOuterGroup('<?= $outerKeyAttr ?>')">
-                    <td colspan="4" class="px-3 py-2">
+                    <td colspan="<?= $tableColCount ?>" class="px-3 py-2">
                         <div class="flex items-center gap-2 text-sm">
                             <span class="outer-chevron transition-transform inline-block w-3">▾</span>
                             <span class="font-semibold"><?= htmlspecialchars($outer['po_number']) ?></span>
@@ -404,7 +541,7 @@ include __DIR__ . '/includes/layout_start.php';
                 </tr>
                 <?php foreach ($outer['inner_groups'] as $group): ?>
                 <tr class="po-group-header bg-slate-100 border-t border-b border-slate-300 cursor-pointer" data-group-id="<?= $group['po_id'] ?>" data-outer-key="<?= $outerKeyAttr ?>" onclick="togglePoGroup(<?= $group['po_id'] ?>)">
-                    <td colspan="4" class="px-3 py-2 pl-6">
+                    <td colspan="<?= $tableColCount ?>" class="px-3 py-2 pl-6">
                         <div class="flex items-center gap-2 text-sm">
                             <span class="chevron transition-transform inline-block w-3">▾</span>
                             <span class="font-semibold text-brand-dark"><?= htmlspecialchars($group['item_code']) ?></span>
@@ -430,7 +567,12 @@ include __DIR__ . '/includes/layout_start.php';
                         $daysSinceDelivered = (int)$bill->diff($today)->format('%r%a');
                     }
                 ?>
-                <tr class="delivery-row border-b border-slate-100 hover:bg-slate-50 <?= $rowClass ?>" data-group-id="<?= $group['po_id'] ?>" data-outer-key="<?= $outerKeyAttr ?>" data-status="<?= htmlspecialchars($d['status']) ?>" data-search="<?= htmlspecialchars(strtolower($d['po_number'] . ' ' . $d['customer_name'] . ' ' . $d['item_code'] . ' ' . $d['description'])) ?>" data-days-since-delivered="<?= $daysSinceDelivered ?? '' ?>">
+                <tr class="delivery-row border-b border-slate-100 hover:bg-slate-50 <?= $rowClass ?>" data-group-id="<?= $group['po_id'] ?>" data-outer-key="<?= $outerKeyAttr ?>" data-status="<?= htmlspecialchars($d['status']) ?>" data-search="<?= htmlspecialchars(strtolower($d['po_number'] . ' ' . $d['customer_name'] . ' ' . $d['item_code'] . ' ' . $d['description'])) ?>" data-days-since-delivered="<?= $daysSinceDelivered ?? '' ?>" data-delivery-id="<?= (int)$d['id'] ?>">
+                    <?php if ($canEdit): ?>
+                    <td class="w-8 text-center px-2 py-2">
+                        <input type="checkbox" class="bulk-select-checkbox rounded border-slate-300 text-brand-green focus:ring-brand-green" data-delivery-id="<?= (int)$d['id'] ?>" data-outer-key="<?= $outerKeyAttr ?>" data-status="<?= htmlspecialchars($d['status']) ?>">
+                    </td>
+                    <?php endif; ?>
                     <td class="px-3 py-2 pl-12"><?= htmlspecialchars($d['due_date']) ?></td>
                     <td class="px-3 py-2"><?= $d['quantity'] ?></td>
                     <?php if ($canEdit): ?>
@@ -596,6 +738,169 @@ include __DIR__ . '/includes/layout_start.php';
     </div>
 
     <?php if ($canEdit): ?>
+    <!-- Sticky bulk action bar: appears when any delivery row is selected.
+         Selection is scoped to a single PO; picking a row from a different PO
+         auto-clears the earlier selection (see JS below). -->
+    <div id="bulkActionBar" class="hidden fixed bottom-0 left-0 right-0 md:left-60 z-40 bg-brand-dark text-white shadow-2xl px-4 py-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="text-sm">
+                <span id="bulkCount" class="font-bold">0</span> selected in PO
+                <span id="bulkPoLabel" class="font-semibold text-brand-green"></span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Actions for non-Delivered selections -->
+                <span id="bulkPendingActions" class="hidden flex-wrap items-center gap-2 md:flex">
+                    <select id="bulkStatusSelect" class="px-3 py-1.5 rounded-md text-slate-800 text-sm">
+                        <option value="">Change status to...</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Material Ready">Material Ready</option>
+                        <option value="Shipped">Shipped</option>
+                    </select>
+                    <button type="button" id="bulkApplyStatusBtn" class="px-3 py-1.5 rounded-md bg-white text-brand-dark text-sm font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" disabled>Apply</button>
+                    <button type="button" id="bulkMarkDeliveredBtn" class="px-3 py-1.5 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Mark Delivered</button>
+                    <button type="button" id="bulkDeleteBtn" class="px-3 py-1.5 rounded-md bg-red-600 text-white text-sm font-semibold hover:bg-red-700">Delete</button>
+                </span>
+                <!-- Actions for all-Delivered selections -->
+                <span id="bulkDeliveredActions" class="hidden flex-wrap items-center gap-2 md:flex">
+                    <button type="button" id="bulkEditDetailsBtn" class="px-3 py-1.5 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Edit DC / Invoice</button>
+                </span>
+                <!-- Shown when selection is mixed -->
+                <span id="bulkMixedNotice" class="hidden text-xs text-amber-200 italic">Mixed selection — pick either all Delivered or all non-Delivered.</span>
+                <button type="button" id="bulkClearBtn" class="px-3 py-1.5 rounded-md border border-white/40 text-sm font-medium hover:bg-white/10">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Delivered modal: same DC/invoice inputs, one shared value set
+         applied to every selected row on submit. -->
+    <div id="bulkDeliveredModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
+            <h3 class="text-lg font-semibold text-brand-dark mb-1">Mark <span id="bulkDeliveredCount">0</span> deliveries as Delivered</h3>
+            <p class="text-sm text-slate-500 mb-3">Same DC / invoice info will be applied to every selected row. Provide either <strong>DC Number + DC Date</strong> or <strong>Invoice Number + Bill Date</strong> (or both).</p>
+            <form method="POST" id="bulkDeliveredForm" onsubmit="return validateBulkDelivered()">
+                <?= csrfField() ?>
+                <input type="hidden" name="bulk_update_status" value="1">
+                <input type="hidden" name="bulk_status" value="Delivered">
+                <div id="bulkDeliveredIdInputs"></div>
+                <div class="space-y-3 mb-4">
+                    <div class="rounded-md border border-slate-200 p-3">
+                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">DC Info</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">DC Number</label>
+                                <input type="text" name="dc_number" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">DC Date</label>
+                                <input type="date" name="dc_date" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-md border border-slate-200 p-3">
+                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Invoice / Bill Info</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Invoice Number</label>
+                                <input type="text" name="invoice_number" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Bill Date</label>
+                                <input type="date" name="bill_date" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="bulkDeliveredError" class="hidden text-red-600 text-xs bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeBulkDeliveredModal()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Save &amp; Mark Delivered</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk status change confirmation modal: fires from the Apply button
+         instead of a browser confirm() (which is often suppressed). -->
+    <div id="bulkStatusConfirmModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-5">
+            <h3 class="text-lg font-semibold text-brand-dark mb-2">Change status</h3>
+            <p id="bulkStatusConfirmMsg" class="text-sm text-slate-600 mb-4"></p>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="closeBulkStatusConfirm()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                <button type="button" id="bulkStatusConfirmYes" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark">Change Status</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk delete confirmation modal: same reason as above -- inline
+         confirms are unreliable so we render our own. -->
+    <div id="bulkDeleteConfirmModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-5">
+            <h3 class="text-lg font-semibold text-brand-dark mb-2">Delete selected deliveries</h3>
+            <p id="bulkDeleteConfirmMsg" class="text-sm text-slate-600 mb-4"></p>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="closeBulkDeleteConfirm()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                <button type="button" id="bulkDeleteConfirmYes" class="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-semibold hover:bg-red-700">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk edit DC/Invoice modal: only for selections where every row
+         is already-Delivered. Same fields as the mark-delivered modal;
+         status stays Delivered, only the detail fields get updated. -->
+    <div id="bulkEditDetailsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
+            <h3 class="text-lg font-semibold text-brand-dark mb-1">Edit DC / Invoice for <span id="bulkEditCount">0</span> deliveries</h3>
+            <p class="text-sm text-slate-500 mb-3">These rows stay Delivered. Same values will be applied to all selected. At least one full pair (<strong>DC No + DC Date</strong> or <strong>Invoice No + Bill Date</strong>) must be filled.</p>
+            <form method="POST" id="bulkEditDetailsForm" onsubmit="return validateBulkEdit()">
+                <?= csrfField() ?>
+                <input type="hidden" name="bulk_edit_details" value="1">
+                <div id="bulkEditIdInputs"></div>
+                <div class="space-y-3 mb-4">
+                    <div class="rounded-md border border-slate-200 p-3">
+                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">DC Info</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">DC Number</label>
+                                <input type="text" name="dc_number" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">DC Date</label>
+                                <input type="date" name="dc_date" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-md border border-slate-200 p-3">
+                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Invoice / Bill Info</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Invoice Number</label>
+                                <input type="text" name="invoice_number" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Bill Date</label>
+                                <input type="date" name="bill_date" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-brand-green">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="bulkEditError" class="hidden text-red-600 text-xs bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeBulkEditModal()" class="px-4 py-2 rounded-md border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-md bg-brand-green text-white text-sm font-semibold hover:bg-brand-greendark transition-colors cursor-pointer">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hidden form for bulk delete — submitted programmatically after
+         confirming to avoid an inline form nested in the table. -->
+    <form method="POST" id="bulkDeleteForm" class="hidden">
+        <?= csrfField() ?>
+        <input type="hidden" name="bulk_delete" value="1">
+        <div id="bulkDeleteIdInputs"></div>
+    </form>
+
     <div id="deliveryDetailsModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-5">
             <h3 class="text-lg font-semibold text-brand-dark mb-3">Delivery Details</h3>
@@ -1081,4 +1386,242 @@ include __DIR__ . '/includes/layout_start.php';
             applyFilters();
         })();
     </script>
+
+    <?php if ($canEdit): ?>
+    <script>
+    // Bulk-actions module. Selection is scoped to ONE PO -- picking a row
+    // from a different PO auto-clears the previous selection so the
+    // shared DC/invoice info always applies to a single customer.
+    (function () {
+        // Map: id -> status. Lets the bar figure out if the selection is all
+        // Delivered / all non-Delivered / mixed and swap actions accordingly.
+        var selected = new Map();
+        var currentOuterKey = null;
+
+        var bar = document.getElementById('bulkActionBar');
+        var countEl = document.getElementById('bulkCount');
+        var poLabel = document.getElementById('bulkPoLabel');
+        var statusSelect = document.getElementById('bulkStatusSelect');
+        var applyBtn = document.getElementById('bulkApplyStatusBtn');
+        var deliveredBtn = document.getElementById('bulkMarkDeliveredBtn');
+        var deleteBtn = document.getElementById('bulkDeleteBtn');
+        var editBtn = document.getElementById('bulkEditDetailsBtn');
+        var clearBtn = document.getElementById('bulkClearBtn');
+        var pendingActions = document.getElementById('bulkPendingActions');
+        var deliveredActions = document.getElementById('bulkDeliveredActions');
+        var mixedNotice = document.getElementById('bulkMixedNotice');
+
+        function selectionKind() {
+            var deliv = 0, other = 0;
+            selected.forEach(function (status) {
+                if (status === 'Delivered') deliv++; else other++;
+            });
+            if (deliv > 0 && other > 0) return 'mixed';
+            if (deliv > 0) return 'delivered';
+            return 'pending';
+        }
+
+        function refreshBar() {
+            countEl.textContent = selected.size;
+            poLabel.textContent = currentOuterKey || '';
+            bar.classList.toggle('hidden', selected.size === 0);
+            var kind = selectionKind();
+            pendingActions.classList.toggle('hidden', kind !== 'pending');
+            pendingActions.classList.toggle('flex', kind === 'pending');
+            deliveredActions.classList.toggle('hidden', kind !== 'delivered');
+            deliveredActions.classList.toggle('flex', kind === 'delivered');
+            mixedNotice.classList.toggle('hidden', kind !== 'mixed');
+        }
+
+        function clearSelection() {
+            selected.clear();
+            currentOuterKey = null;
+            document.querySelectorAll('.bulk-select-checkbox:checked').forEach(function (cb) {
+                cb.checked = false;
+                setRowControlsDisabled(cb.closest('tr'), false);
+            });
+            statusSelect.value = '';
+            applyBtn.disabled = true;
+            refreshBar();
+        }
+
+        // Toggle inline row controls (status dropdown, delete button) so
+        // they can't fire while a checkbox in that row is selected. Prevents
+        // accidental collision between bulk action and per-row action.
+        function setRowControlsDisabled(row, disabled) {
+            if (!row) return;
+            row.classList.toggle('bg-brand-green/10', disabled);
+            row.querySelectorAll('select[name="status"], button[name="delete_delivery"]').forEach(function (el) {
+                el.disabled = disabled;
+                if (disabled) el.setAttribute('data-was-editable', '1');
+            });
+        }
+
+        document.addEventListener('change', function (e) {
+            var cb = e.target;
+            if (!cb.classList || !cb.classList.contains('bulk-select-checkbox')) return;
+            var id = parseInt(cb.dataset.deliveryId, 10);
+            var outerKey = cb.dataset.outerKey;
+            var status = cb.dataset.status;
+            var row = cb.closest('tr');
+            if (cb.checked) {
+                if (currentOuterKey && currentOuterKey !== outerKey) {
+                    clearSelection();
+                    cb.checked = true;
+                }
+                currentOuterKey = outerKey;
+                selected.set(id, status);
+                setRowControlsDisabled(row, true);
+            } else {
+                selected.delete(id);
+                if (selected.size === 0) currentOuterKey = null;
+                setRowControlsDisabled(row, false);
+            }
+            refreshBar();
+        });
+
+        statusSelect.addEventListener('change', function () {
+            applyBtn.disabled = statusSelect.value === '';
+        });
+
+        clearBtn.addEventListener('click', clearSelection);
+
+        function buildAndSubmitStatusForm() {
+            var f = document.createElement('form');
+            f.method = 'POST';
+            f.style.display = 'none';
+            var csrf = document.querySelector('input[name="_csrf"]');
+            f.appendChild(csrf.cloneNode(true));
+            var flag = document.createElement('input');
+            flag.type = 'hidden'; flag.name = 'bulk_update_status'; flag.value = '1';
+            f.appendChild(flag);
+            var st = document.createElement('input');
+            st.type = 'hidden'; st.name = 'bulk_status'; st.value = statusSelect.value;
+            f.appendChild(st);
+            selected.forEach(function (_status, id) {
+                var i = document.createElement('input');
+                i.type = 'hidden'; i.name = 'delivery_ids[]'; i.value = id;
+                f.appendChild(i);
+            });
+            document.body.appendChild(f);
+            f.submit();
+        }
+
+        var statusConfirm = document.getElementById('bulkStatusConfirmModal');
+        var statusConfirmMsg = document.getElementById('bulkStatusConfirmMsg');
+        var statusConfirmYes = document.getElementById('bulkStatusConfirmYes');
+        window.closeBulkStatusConfirm = function () { statusConfirm.classList.add('hidden'); };
+        statusConfirmYes.addEventListener('click', function () {
+            closeBulkStatusConfirm();
+            buildAndSubmitStatusForm();
+        });
+        applyBtn.addEventListener('click', function () {
+            if (selected.size === 0 || statusSelect.value === '') return;
+            statusConfirmMsg.textContent = 'Change ' + selected.size + ' delivery row(s) to "' + statusSelect.value + '"?';
+            statusConfirm.classList.remove('hidden');
+        });
+
+        deliveredBtn.addEventListener('click', function () {
+            if (selected.size === 0) return;
+            var wrap = document.getElementById('bulkDeliveredIdInputs');
+            wrap.innerHTML = '';
+            selected.forEach(function (_status, id) {
+                var i = document.createElement('input');
+                i.type = 'hidden'; i.name = 'delivery_ids[]'; i.value = id;
+                wrap.appendChild(i);
+            });
+            document.getElementById('bulkDeliveredCount').textContent = selected.size;
+            document.getElementById('bulkDeliveredError').classList.add('hidden');
+            document.getElementById('bulkDeliveredForm').reset();
+            // re-populate ids (reset() wiped nothing here since ids are in a separate div, but be safe)
+            selected.forEach(function (id) {
+                if (!wrap.querySelector('input[value="' + id + '"]')) {
+                    var i = document.createElement('input');
+                    i.type = 'hidden'; i.name = 'delivery_ids[]'; i.value = id;
+                    wrap.appendChild(i);
+                }
+            });
+            document.getElementById('bulkDeliveredModal').classList.remove('hidden');
+        });
+
+        editBtn.addEventListener('click', function () {
+            if (selected.size === 0) return;
+            var wrap = document.getElementById('bulkEditIdInputs');
+            wrap.innerHTML = '';
+            selected.forEach(function (_status, id) {
+                var i = document.createElement('input');
+                i.type = 'hidden'; i.name = 'delivery_ids[]'; i.value = id;
+                wrap.appendChild(i);
+            });
+            document.getElementById('bulkEditCount').textContent = selected.size;
+            document.getElementById('bulkEditError').classList.add('hidden');
+            document.getElementById('bulkEditDetailsForm').reset();
+            selected.forEach(function (_status, id) {
+                if (!wrap.querySelector('input[value="' + id + '"]')) {
+                    var i = document.createElement('input');
+                    i.type = 'hidden'; i.name = 'delivery_ids[]'; i.value = id;
+                    wrap.appendChild(i);
+                }
+            });
+            document.getElementById('bulkEditDetailsModal').classList.remove('hidden');
+        });
+
+        window.closeBulkEditModal = function () {
+            document.getElementById('bulkEditDetailsModal').classList.add('hidden');
+        };
+        window.validateBulkEdit = function () {
+            var f = document.getElementById('bulkEditDetailsForm');
+            var hasDc = f.dc_number.value.trim() !== '' && f.dc_date.value.trim() !== '';
+            var hasInv = f.invoice_number.value.trim() !== '' && f.bill_date.value.trim() !== '';
+            var err = document.getElementById('bulkEditError');
+            if (!hasDc && !hasInv) {
+                err.textContent = 'Please fill either DC Number + DC Date or Invoice Number + Bill Date.';
+                err.classList.remove('hidden');
+                return false;
+            }
+            err.classList.add('hidden');
+            return true;
+        };
+
+        var delConfirm = document.getElementById('bulkDeleteConfirmModal');
+        var delConfirmMsg = document.getElementById('bulkDeleteConfirmMsg');
+        var delConfirmYes = document.getElementById('bulkDeleteConfirmYes');
+        window.closeBulkDeleteConfirm = function () { delConfirm.classList.add('hidden'); };
+        delConfirmYes.addEventListener('click', function () {
+            closeBulkDeleteConfirm();
+            var wrap = document.getElementById('bulkDeleteIdInputs');
+            wrap.innerHTML = '';
+            selected.forEach(function (_status, id) {
+                var i = document.createElement('input');
+                i.type = 'hidden'; i.name = 'delivery_ids[]'; i.value = id;
+                wrap.appendChild(i);
+            });
+            document.getElementById('bulkDeleteForm').submit();
+        });
+        deleteBtn.addEventListener('click', function () {
+            if (selected.size === 0) return;
+            delConfirmMsg.textContent = 'Delete ' + selected.size + ' delivery row(s)? This cannot be undone.';
+            delConfirm.classList.remove('hidden');
+        });
+
+        window.closeBulkDeliveredModal = function () {
+            document.getElementById('bulkDeliveredModal').classList.add('hidden');
+        };
+        window.validateBulkDelivered = function () {
+            var f = document.getElementById('bulkDeliveredForm');
+            var hasDc = f.dc_number.value.trim() !== '' && f.dc_date.value.trim() !== '';
+            var hasInv = f.invoice_number.value.trim() !== '' && f.bill_date.value.trim() !== '';
+            var err = document.getElementById('bulkDeliveredError');
+            if (!hasDc && !hasInv) {
+                err.textContent = 'Please fill either DC Number + DC Date or Invoice Number + Bill Date.';
+                err.classList.remove('hidden');
+                return false;
+            }
+            err.classList.add('hidden');
+            return true;
+        };
+    })();
+    </script>
+    <?php endif; ?>
+
 <?php include __DIR__ . '/includes/layout_end.php'; ?>
